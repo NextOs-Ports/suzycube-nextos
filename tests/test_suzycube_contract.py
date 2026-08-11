@@ -156,6 +156,7 @@ def check_public_elf():
 def check_input_recovery_contract():
     source = (PORT / "src/input.c").read_text(encoding="utf-8")
     helper = (PORT / "src/input_evdev.c").read_text(encoding="utf-8")
+    policy = (PORT / "src/input_policy.h").read_text(encoding="utf-8")
     require("EVIOCGKEY" in source,
             "input must resample current evdev key state")
     require("sc_evdev_apply_button_snapshot" in source and
@@ -167,6 +168,18 @@ def check_input_recovery_contract():
     require("ev.cdevice.which == controller_instance" in source and
             "ev.jdevice.which == controller_instance" in source,
             "hotplug must not close the active pad for an unrelated device")
+    require("nxinput_core_filter_stick" in source and
+            "SC_INPUT_STICK_ENTER_DEADZONE 0.40f" in policy and
+            "SC_INPUT_STICK_EXIT_DEADZONE 0.30f" in policy,
+            "worn-stick radial hysteresis policy is missing")
+    require("nxinput_core_trigger" in source and
+            "SC_INPUT_TRIGGER_DEADZONE 0.05f" in policy and
+            "SDL_CONTROLLER_AXIS_TRIGGERLEFT) + 1.0f" not in source,
+            "released SDL triggers must stay at zero")
+    require("motion_neutral_pending" in source and
+            "request_neutral_motion();" in source and
+            "motion_non_neutral || motion_neutral_pending" in source,
+            "focus/hotplug must flush a neutral MotionEvent")
 
 
 def main():

@@ -3,7 +3,7 @@
   "source_root": ".",
   "package": {
     "id": "suzycube",
-    "version": "1.1.3",
+    "version": "1.1.4",
     "profile": "universal-portmaster",
     "launcher": "Suzy Cube.sh",
     "launcher_chain": [
@@ -23,7 +23,7 @@
     }
   },
   "release": {
-    "source_date_epoch": 1786320000,
+    "source_date_epoch": 1786406400,
     "max_glibc": "2.30",
     "compression": "deflated"
   },
@@ -116,7 +116,7 @@
       "target": "suzycube/suzycube-nextos",
       "kind": "project-linux",
       "mode": "0755",
-      "sha256": "2ae40c846b80deb16394bcce19b58d3df677ec303858df94007163c3fbf69232",
+      "sha256": "3c1fc8b61d941fa0e4cb8d8804afa4176a20bb49af64fd50b08f4bdf22069a8a",
       "architecture": "aarch64",
       "build_profile": "universal-low-glibc",
       "provenance": "build_universal.sh; pinned offline Debian Buster image sha256:036c7910ea53bc78cc213452afa92fa83d55de1c51ae54f315af58b5a41a45cf; target sysroot used for headers only",
@@ -137,14 +137,14 @@
       "target": "suzycube/README.md",
       "kind": "payload",
       "mode": "0644",
-      "sha256": "22be059c142892f24e8621a0572fd60530efceb052550c909c666dac03f83337"
+      "sha256": "32db9d87a2b1f5e78d9d40c55528b584fcbe42e5eb761677af4b7eb2261bdc7d"
     },
     {
       "source": "INSTALLATION.md",
       "target": "suzycube/INSTALLATION.md",
       "kind": "payload",
       "mode": "0644",
-      "sha256": "49d18a3ce84566024c0964b77af346b808955c4ea1765e3a8b7e6ed47c39ea56"
+      "sha256": "8e88a476da8d7ca51edf36b0b401a953d6d57c336c648804f19caf0673ddd01e"
     },
     {
       "source": "NOTICE.md",
@@ -165,7 +165,7 @@
       "target": "suzycube/version.txt",
       "kind": "payload",
       "mode": "0644",
-      "sha256": "5dae0c0a5ed3cdaa78704e25bb38d72c31018311e933283d06ed4f93360bfc6c"
+      "sha256": "2bde3ae39f59ee21201f87089cf7d215cf58ea437711e3d8e3e65fbc3078c798"
     },
     {
       "source": "gamedata-template/README.txt",

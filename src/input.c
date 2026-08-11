@@ -34,7 +34,9 @@
 
 #include "sc.h"
 #include "input_evdev.h"
+#include "input_policy.h"
 #include "nx_elf.h"
+#include "nxinput_core.h"
 
 static SDL_GameController *controller;
 static SDL_Joystick *raw_joystick;
@@ -46,6 +48,9 @@ static int input_diag;
 static int input_active = 1;
 static int screen_width = 1280;
 static int screen_height = 720;
+static nxinput_stick_filter stick_filter[2];
+static int motion_non_neutral;
+static int motion_neutral_pending;
 
 void sc_input_request_exit(void) { exit_requested = 1; }
 int sc_input_exit_requested(void) { return exit_requested; }
@@ -473,16 +478,26 @@ static void apply_evdev_snapshot(void)
 
 /* ------------------------------------------------------------------ leitura */
 
-static float axis_value(SDL_GameControllerAxis axis)
+static void reset_motion_filters(void)
 {
-    const int trigger = axis == SDL_CONTROLLER_AXIS_TRIGGERLEFT ||
-                        axis == SDL_CONTROLLER_AXIS_TRIGGERRIGHT;
-    if (!input_active)
-        return trigger ? -1.0f : 0.0f;
+    memset(stick_filter, 0, sizeof stick_filter);
+}
 
-    /* O repouso Android/SDL dos gatilhos e' -1. Eixo ausente nao pode virar
-     * 0.5 depois da conversao para [0, 1]. */
-    Sint16 value = trigger ? INT16_MIN : 0;
+static void request_neutral_motion(void)
+{
+    /* The Android input stack must see a neutral sample across every focus or
+     * device boundary. Otherwise Unity/InControl can retain the last axes even
+     * though SDL has already discarded the controller state. */
+    motion_neutral_pending = 1;
+    reset_motion_filters();
+}
+
+static Sint16 axis_raw(SDL_GameControllerAxis axis)
+{
+    if (!input_active)
+        return 0;
+
+    Sint16 value = 0;
     if (controller) {
         SDL_GameControllerButtonBind bind =
             SDL_GameControllerGetBindForAxis(controller, axis);
@@ -499,14 +514,14 @@ static float axis_value(SDL_GameControllerAxis axis)
                   ? raw_axis[axis] : -1;
         if (index >= 0 && index < SDL_JoystickNumAxes(raw_joystick))
             value = SDL_JoystickGetAxis(raw_joystick, index);
+        else if (axis == SDL_CONTROLLER_AXIS_TRIGGERLEFT &&
+                 SDL_JoystickNumButtons(raw_joystick) > 6)
+            value = SDL_JoystickGetButton(raw_joystick, 6) ? INT16_MAX : 0;
+        else if (axis == SDL_CONTROLLER_AXIS_TRIGGERRIGHT &&
+                 SDL_JoystickNumButtons(raw_joystick) > 7)
+            value = SDL_JoystickGetButton(raw_joystick, 7) ? INT16_MAX : 0;
     }
-    float f = value / 32767.0f;
-    if (f > 1.0f) f = 1.0f;
-    if (f < -1.0f) f = -1.0f;
-    /* Zona morta pequena: o InControl aplica a dele por cima. */
-    if (f > -0.12f && f < 0.12f)
-        f = 0.0f;
-    return f;
+    return value;
 }
 
 static void apply_joystick_hat(SDL_Joystick *joy)
@@ -745,6 +760,14 @@ int sc_input_init(void)
                     face);
     }
     input_active = 1;
+    exit_requested = 0;
+    memset(buttons, 0, sizeof buttons);
+    memset(previous, 0, sizeof previous);
+    memset(trigger_down, 0, sizeof trigger_down);
+    memset(trigger_prev, 0, sizeof trigger_prev);
+    reset_motion_filters();
+    motion_non_neutral = 0;
+    motion_neutral_pending = 0;
     if (SDL_WasInit(SDL_INIT_GAMECONTROLLER) == 0 &&
         SDL_InitSubSystem(SDL_INIT_GAMECONTROLLER) != 0)
         fprintf(stderr, "[sc/input] SDL_InitSubSystem(GAMECONTROLLER): %s\n",
@@ -759,6 +782,9 @@ int sc_input_init(void)
 
     nxinput_config config;
     nxinput_config_init(&config);
+    config.stick_enter_deadzone = SC_INPUT_STICK_ENTER_DEADZONE;
+    config.stick_exit_deadzone = SC_INPUT_STICK_EXIT_DEADZONE;
+    config.trigger_deadzone = SC_INPUT_TRIGGER_DEADZONE;
     sc_nxinput = nxinput_create(&config);
     if (!sc_nxinput)
         fprintf(stderr, "[sc/input] nxinput indisponivel: %s\n",
@@ -786,24 +812,29 @@ void sc_input_poll(void *env, void *player, unsigned long frame)
             break;
         case SDL_CONTROLLERDEVICEREMOVED:
             if (ev.cdevice.which == controller_instance) {
+                request_neutral_motion();
                 close_controller();
                 open_controller();
             }
             break;
         case SDL_JOYDEVICEREMOVED:
             if (ev.jdevice.which == controller_instance) {
+                request_neutral_motion();
                 close_controller();
                 open_controller();
             }
             break;
         case SDL_WINDOWEVENT:
-            if (ev.window.event == SDL_WINDOWEVENT_FOCUS_LOST)
+            if (ev.window.event == SDL_WINDOWEVENT_FOCUS_LOST) {
+                request_neutral_motion();
                 input_active = 0;
-            else if (ev.window.event == SDL_WINDOWEVENT_FOCUS_GAINED)
+            } else if (ev.window.event == SDL_WINDOWEVENT_FOCUS_GAINED) {
                 input_active = 1;
+            }
             break;
         case SDL_APP_WILLENTERBACKGROUND:
         case SDL_APP_DIDENTERBACKGROUND:
+            request_neutral_motion();
             input_active = 0;
             break;
         case SDL_APP_WILLENTERFOREGROUND:
@@ -828,7 +859,8 @@ void sc_input_poll(void *env, void *player, unsigned long frame)
     apply_test_script(frame);
 
     if (test_n == 0 && (!input_active || (!controller && !raw_joystick))) {
-        int release_pending = trigger_down[0] || trigger_down[1];
+        int release_pending = trigger_down[0] || trigger_down[1] ||
+                              motion_non_neutral || motion_neutral_pending;
         for (int i = 0; i < SDL_CONTROLLER_BUTTON_MAX; i++)
             release_pending |= previous[i] != 0;
         if (!release_pending)
@@ -852,14 +884,28 @@ void sc_input_poll(void *env, void *player, unsigned long frame)
                sc_jni_key_event(buttons[i] ? 0 : 1, android_key[i], 0));
     }
 
-    float lx = axis_value(SDL_CONTROLLER_AXIS_LEFTX);
-    float ly = axis_value(SDL_CONTROLLER_AXIS_LEFTY);
-    float rx = axis_value(SDL_CONTROLLER_AXIS_RIGHTX);
-    float ry = axis_value(SDL_CONTROLLER_AXIS_RIGHTY);
-    float lt = (axis_value(SDL_CONTROLLER_AXIS_TRIGGERLEFT) + 1.0f) * 0.5f;
-    float rt = (axis_value(SDL_CONTROLLER_AXIS_TRIGGERRIGHT) + 1.0f) * 0.5f;
-    if (lt < 0.0f) lt = 0.0f;
-    if (rt < 0.0f) rt = 0.0f;
+    float lx = 0.0f, ly = 0.0f, rx = 0.0f, ry = 0.0f;
+    nxinput_core_filter_stick(
+        &stick_filter[0], axis_raw(SDL_CONTROLLER_AXIS_LEFTX),
+        axis_raw(SDL_CONTROLLER_AXIS_LEFTY),
+        SC_INPUT_STICK_ENTER_DEADZONE, SC_INPUT_STICK_EXIT_DEADZONE,
+        &lx, &ly);
+    nxinput_core_filter_stick(
+        &stick_filter[1], axis_raw(SDL_CONTROLLER_AXIS_RIGHTX),
+        axis_raw(SDL_CONTROLLER_AXIS_RIGHTY),
+        SC_INPUT_STICK_ENTER_DEADZONE, SC_INPUT_STICK_EXIT_DEADZONE,
+        &rx, &ry);
+
+    /* SDL_GameController standardizes triggers to [0, 32767], including
+     * mappings such as lefttrigger:b6/righttrigger:b7. Released digital
+     * triggers therefore return 0, not -32768; treating that 0 as a signed
+     * midpoint made both released triggers look 50% pressed on ROCKNIX. */
+    float lt = nxinput_core_trigger(
+        axis_raw(SDL_CONTROLLER_AXIS_TRIGGERLEFT),
+        SC_INPUT_TRIGGER_DEADZONE);
+    float rt = nxinput_core_trigger(
+        axis_raw(SDL_CONTROLLER_AXIS_TRIGGERRIGHT),
+        SC_INPUT_TRIGGER_DEADZONE);
     if (evdev_pad.semantic) {
         /* O bind de gatilho pertence ao mapping estrangeiro; o estado
          * digital de BTN_TL2/TR2 do proprio evdev e' a fonte. */
@@ -886,8 +932,17 @@ void sc_input_poll(void *env, void *player, unsigned long frame)
     float hat_y = (buttons[SDL_CONTROLLER_BUTTON_DPAD_DOWN] ? 1.0f : 0.0f) -
                   (buttons[SDL_CONTROLLER_BUTTON_DPAD_UP] ? 1.0f : 0.0f);
 
+    const int current_non_neutral =
+        lx != 0.0f || ly != 0.0f || rx != 0.0f || ry != 0.0f ||
+        lt != 0.0f || rt != 0.0f || hat_x != 0.0f || hat_y != 0.0f;
+    if (motion_neutral_pending && current_non_neutral)
+        inject(env, player,
+               sc_jni_motion_event(0.0f, 0.0f, 0.0f, 0.0f,
+                                   0.0f, 0.0f, 0.0f, 0.0f));
     inject(env, player,
            sc_jni_motion_event(lx, ly, rx, ry, lt, rt, hat_x, hat_y));
+    motion_non_neutral = current_non_neutral;
+    motion_neutral_pending = 0;
 }
 
 void sc_input_close(void)

@@ -10,15 +10,25 @@ PORT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)
 REPO_ROOT=$(git -C "$PORT_DIR" rev-parse --show-toplevel)
 cd "$PORT_DIR"
 
-INPUT_TEST=$(mktemp "${TMPDIR:-/tmp}/suzycube-input-test.XXXXXX")
+INPUT_EVDEV_TEST=$(mktemp "${TMPDIR:-/tmp}/suzycube-input-evdev-test.XXXXXX")
+INPUT_POLICY_TEST=$(mktemp "${TMPDIR:-/tmp}/suzycube-input-policy-test.XXXXXX")
 cleanup() {
-  rm -f -- "$INPUT_TEST"
+  rm -f -- "$INPUT_EVDEV_TEST" "$INPUT_POLICY_TEST"
 }
 trap cleanup EXIT INT TERM
 
 "${HOSTCC:-cc}" -std=c11 -Wall -Wextra -Werror -Isrc \
-  tests/test_input_evdev.c src/input_evdev.c -o "$INPUT_TEST"
-"$INPUT_TEST"
+  tests/test_input_evdev.c src/input_evdev.c -o "$INPUT_EVDEV_TEST"
+"$INPUT_EVDEV_TEST"
+
+SDL_CFLAGS=$(pkg-config --cflags sdl2)
+"${HOSTCC:-cc}" -std=c11 -Wall -Wextra -Werror -Isrc $SDL_CFLAGS \
+  -I"$REPO_ROOT/framework/nxinput/include" \
+  -I"$REPO_ROOT/framework/nxinput/src" \
+  tests/test_input_policy.c \
+  "$REPO_ROOT/framework/nxinput/src/nxinput_core.c" \
+  -lm -o "$INPUT_POLICY_TEST"
+"$INPUT_POLICY_TEST"
 
 for script in build_universal.sh "Suzy Cube.sh" \
               nxextract/run-extractor.sh nxextract/nxextract-runtime-env.sh \

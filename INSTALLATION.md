@@ -67,6 +67,12 @@ that can be matched unambiguously. This prevents a dropped release event from
 leaving a D-pad direction stuck. As a compatibility override,
 `SC_FACE_LAYOUT=firmware` preserves the firmware's face-button mapping.
 
+Version 1.1.4 also filters both sticks with a radial 0.40/0.30 engage/release
+hysteresis, treats SDL controller triggers as neutral at their standardized
+zero rest value, and sends an explicit neutral motion sample after focus loss
+or controller hotplug. Together these prevent worn-stick drift and digital
+L2/R2 mappings from behaving as if a control remained held.
+
 ## Troubleshooting
 
 The port writes `log.txt` next to the launcher, and the installer writes

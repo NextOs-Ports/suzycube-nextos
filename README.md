@@ -69,6 +69,12 @@ port compares the SDL mapping against the kernel's semantic positions and only
 normalizes the two pairs when that inversion is proven; positional mappings
 are left untouched.
 
+Since v1.1.4, both sticks use radial 0.40/0.30 engage/release hysteresis,
+L2/R2 respect SDL's standardized zero rest value (including digital-button
+trigger mappings), and focus/hotplug boundaries explicitly send neutral motion
+to Unity. This prevents worn-stick drift and controls that appear to stay held
+on ROCKNIX/muOS.
+
 ### Installation
 
 See [`INSTALLATION.md`](INSTALLATION.md). In short: extract the release ZIP
@@ -124,6 +130,12 @@ e `JNI_OnLoad` de verdade e dirige o ciclo de vida nativo do UnityPlayer.
 | L1 / R1 | trocar de mundo no mapa |
 | START | começar / pausar |
 | SELECT + START | sair pelo caminho nativo (pause + save + fim) |
+
+Desde a v1.1.4, os dois analógicos usam deadzone radial com histerese
+0,40/0,30, L2/R2 respeitam o repouso zero padronizado pelo SDL (inclusive em
+mapeamentos de gatilhos por botões digitais), e foco/hotplug sempre enviam
+movimento neutro ao Unity. Isso elimina drift de sticks gastos e controles que
+pareciam continuar pressionados no ROCKNIX/muOS.
 
 ### Instalação
 
