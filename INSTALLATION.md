@@ -17,6 +17,10 @@ Common locations: `/roms/ports` (ArkOS, R36S), `/storage/roms/ports` (NextOS),
 
 ## 2. Provide your own copy of the game
 
+The port is validated against **Suzy Cube v1.0.13 arm64**
+(`com.noodlecake.suzycube`). Other arm64 builds of the same package are
+accepted by the installer and should work; ARMv7-only copies do **not** work.
+
 Drop your lawfully acquired **ARM64 Suzy Cube APK** into:
 
 ```
