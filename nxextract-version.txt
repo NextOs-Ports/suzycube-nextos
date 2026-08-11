@@ -1,0 +1,17 @@
+1.2.6
+upstream: nextos_ports_android/suportando_outros_devices/extrator-universal @ 1.2.6
+nxextract/nxextract.py sha256=a4a8e5d3bf2a1344491e27921c54430ee9b4e3fedd0160631da96734fa3d5170
+nxextract/nxextract-ui sha256=046afb583f5a211c946495e639409f81d9cfec706788eeccb7924b0e8e5a50b6
+nxextract/run-extractor.sh sha256=179b72f02b9dfdf3ed1bdc382d074fb4ef07f83e3d62cfccfc74a950e68679c2
+nxextract/nxextract-runtime-env.sh sha256=332919a9960d4317563b647f9932d1a4367da147a425fe2f78eafd706f01563f
+extractor.json sha256=401d07e8a41ecbc21933bef2615c3c96b2a28116c2e057bf67cd05535751ed75
+nxextract/merge-suzycube-data.py sha256=bb4eb4838e78e339eab793a1e8f99251d2400c5e7119ced024adc809ebe898b3
+patches locais: 0 (hook de merge do port, nao patch do extrator)
+
+Builds de APK validadas nesta receita (registro de suporte, NAO gate:
+a receita valida por ESTRUTURA e aceita builds novas sem mudar codigo):
+  1.0.13 build alternativa (mod), OBB embutido em assets/sc.txt ... aceito
+
+Formas de entrada validadas:
+  - APK solto em gamedata/ ................................... aceito
+  - dados em duas fontes (APK + OBB) fatiados em .splitN ..... aceito
