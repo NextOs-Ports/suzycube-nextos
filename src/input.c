@@ -114,7 +114,13 @@ static struct {
     int semantic;
     int trigger_code[2];
     uint8_t trigger_state[2];
-} evdev_pad = { .fd = -1, .trigger_code = { -1, -1 } };
+    /* Sticks no modo semantico: codigo ABS + faixa medida do proprio evdev
+     * (LX, LY, RX, RY); -1 = sem eixo analogico real -> stick neutro. */
+    int stick_code[4];
+    int stick_min[4];
+    int stick_max[4];
+} evdev_pad = { .fd = -1, .trigger_code = { -1, -1 },
+                .stick_code = { -1, -1, -1, -1 } };
 
 /* input_evdev.h mirrors these SDL values to stay SDL-free. */
 _Static_assert((int)SC_PAD_A == (int)SDL_CONTROLLER_BUTTON_A &&
@@ -167,6 +173,11 @@ static void close_evdev_pad(void)
     evdev_pad.semantic = 0;
     evdev_pad.trigger_code[0] = evdev_pad.trigger_code[1] = -1;
     evdev_pad.trigger_state[0] = evdev_pad.trigger_state[1] = 0;
+    for (int i = 0; i < 4; i++) {
+        evdev_pad.stick_code[i] = -1;
+        evdev_pad.stick_min[i] = 0;
+        evdev_pad.stick_max[i] = 0;
+    }
 }
 
 /* Os pads gpio-keys destes handhelds compartilham o GUID generico sem CRC
@@ -213,6 +224,64 @@ static int has_positional_face_codes(const unsigned long *capabilities)
            sc_evdev_test_bit(capabilities, SC_EVDEV_KEY_WORDS, BTN_WEST);
 }
 
+/* Os binds de eixo de um mapping estrangeiro apontam para eixos que este
+ * aparelho nao tem (foi assim que no RG35XXSP/muOS o "stick esquerdo" ficou
+ * cravado fora do centro e o personagem andava sozinho).  No modo semantico a
+ * unica fonte confiavel e' o proprio evdev: ABS_X/Y para o stick esquerdo,
+ * ABS_RX/RY (ou ABS_Z/RZ) para o direito, e so' quando o absinfo tem cara de
+ * stick de verdade -- eixo digital/degenerado deixa o stick neutro. */
+static void configure_semantic_axes(void)
+{
+    static const int primary[4] = { ABS_X, ABS_Y, ABS_RX, ABS_RY };
+    static const int alternate[4] = { -1, -1, ABS_Z, ABS_RZ };
+    unsigned long abs_bits[(ABS_MAX + SC_EVDEV_WORD_BITS) /
+                           SC_EVDEV_WORD_BITS];
+    memset(abs_bits, 0, sizeof abs_bits);
+    if (ioctl(evdev_pad.fd, EVIOCGBIT(EV_ABS, sizeof abs_bits),
+              abs_bits) < 0) {
+        fprintf(stderr,
+                "[sc/input] sticks: EV_ABS ilegivel; sticks neutros\n");
+        return;
+    }
+
+    char summary[128] = "";
+    size_t used = 0;
+    static const char *label[4] = { "LX", "LY", "RX", "RY" };
+    for (int i = 0; i < 4; i++) {
+        int code = -1;
+        if (primary[i] >= 0 &&
+            sc_evdev_test_bit(abs_bits, sizeof abs_bits / sizeof *abs_bits,
+                              primary[i]))
+            code = primary[i];
+        else if (alternate[i] >= 0 &&
+                 sc_evdev_test_bit(abs_bits,
+                                   sizeof abs_bits / sizeof *abs_bits,
+                                   alternate[i]))
+            code = alternate[i];
+
+        struct input_absinfo info;
+        memset(&info, 0, sizeof info);
+        if (code >= 0 && ioctl(evdev_pad.fd, EVIOCGABS(code), &info) >= 0 &&
+            sc_evdev_axis_is_analog(info.minimum, info.maximum)) {
+            evdev_pad.stick_code[i] = code;
+            evdev_pad.stick_min[i] = info.minimum;
+            evdev_pad.stick_max[i] = info.maximum;
+            used += (size_t)snprintf(summary + used, sizeof summary - used,
+                                     " %s=ABS%d[%d..%d]", label[i], code,
+                                     info.minimum, info.maximum);
+        }
+        if (used >= sizeof summary)
+            break;
+    }
+
+    if (summary[0])
+        fprintf(stderr, "[sc/input] sticks do proprio evdev:%s\n", summary);
+    else
+        fprintf(stderr,
+                "[sc/input] sticks: sem eixo analogico proprio -> "
+                "neutros\n");
+}
+
 static void configure_evdev_mapping(void)
 {
     if (controller && sdl_mapping_is_foreign() &&
@@ -226,6 +295,7 @@ static void configure_evdev_mapping(void)
         evdev_pad.trigger_code[1] = sc_evdev_test_bit(
             evdev_pad.capabilities, SC_EVDEV_KEY_WORDS, BTN_TR2)
             ? BTN_TR2 : -1;
+        configure_semantic_axes();
         fprintf(stderr,
                 "[sc/input] mapping SDL '%s' e' de outro aparelho (GUID "
                 "generico); pad '%s' mapeado pelos keycodes do proprio "
@@ -492,12 +562,36 @@ static void request_neutral_motion(void)
     reset_motion_filters();
 }
 
+static Sint16 semantic_axis_value(int index)
+{
+    if (evdev_pad.fd < 0 || evdev_pad.stick_code[index] < 0)
+        return 0;
+    struct input_absinfo info;
+    memset(&info, 0, sizeof info);
+    if (ioctl(evdev_pad.fd, EVIOCGABS(evdev_pad.stick_code[index]),
+              &info) < 0)
+        return 0;
+    return sc_evdev_axis_normalize(info.value, evdev_pad.stick_min[index],
+                                   evdev_pad.stick_max[index]);
+}
+
 static Sint16 axis_raw(SDL_GameControllerAxis axis)
 {
     if (!input_active)
         return 0;
 
     Sint16 value = 0;
+    if (controller && evdev_pad.semantic) {
+        /* Mapping estrangeiro: os binds de eixo tambem sao dele.  O proprio
+         * evdev e' a fonte; gatilho ja e' coberto por BTN_TL2/TR2. */
+        switch (axis) {
+        case SDL_CONTROLLER_AXIS_LEFTX:  return semantic_axis_value(0);
+        case SDL_CONTROLLER_AXIS_LEFTY:  return semantic_axis_value(1);
+        case SDL_CONTROLLER_AXIS_RIGHTX: return semantic_axis_value(2);
+        case SDL_CONTROLLER_AXIS_RIGHTY: return semantic_axis_value(3);
+        default: return 0;
+        }
+    }
     if (controller) {
         SDL_GameControllerButtonBind bind =
             SDL_GameControllerGetBindForAxis(controller, axis);

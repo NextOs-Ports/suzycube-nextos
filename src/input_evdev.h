@@ -40,5 +40,7 @@ enum sc_evdev_face_mapping sc_evdev_classify_face_mapping(
     int bind_a, int bind_b, int bind_x, int bind_y);
 int sc_evdev_semantic_codes(const unsigned long *bits, size_t words,
                             int *logical_codes, size_t count);
+int sc_evdev_axis_is_analog(int minimum, int maximum);
+int16_t sc_evdev_axis_normalize(int value, int minimum, int maximum);
 
 #endif

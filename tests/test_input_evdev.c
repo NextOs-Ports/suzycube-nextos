@@ -123,6 +123,29 @@ int main(void)
 
     assert(sc_evdev_test_bit(bits, SC_EVDEV_KEY_WORDS, -1) == 0);
     assert(sc_evdev_test_bit(bits, SC_EVDEV_KEY_WORDS, KEY_MAX + 1) == 0);
+
+    /* Eixo analogico de verdade tem range largo; dpad-como-ABS nao. */
+    assert(sc_evdev_axis_is_analog(0, 255) == 1);
+    assert(sc_evdev_axis_is_analog(-2048, 2047) == 1);
+    assert(sc_evdev_axis_is_analog(-32768, 32767) == 1);
+    assert(sc_evdev_axis_is_analog(-1, 1) == 0);   /* dpad declarado ABS */
+    assert(sc_evdev_axis_is_analog(0, 1) == 0);    /* eixo degenerado */
+    assert(sc_evdev_axis_is_analog(0, 2) == 0);
+    assert(sc_evdev_axis_is_analog(0, 0) == 0);
+    assert(sc_evdev_axis_is_analog(10, 0) == 0);   /* range invertido */
+
+    /* Normalizacao pelo min/max reais: extremos, centro e clamp. */
+    assert(sc_evdev_axis_normalize(0, 0, 255) == -32767);
+    assert(sc_evdev_axis_normalize(255, 0, 255) == 32767);
+    int center = sc_evdev_axis_normalize(128, 0, 255);
+    assert(center > -300 && center < 300);
+    assert(sc_evdev_axis_normalize(0, -32768, 32767) == 0);
+    assert(sc_evdev_axis_normalize(-32768, -32768, 32767) == -32767);
+    assert(sc_evdev_axis_normalize(32767, -32768, 32767) == 32767);
+    assert(sc_evdev_axis_normalize(-999, 0, 255) == -32767);   /* clamp */
+    assert(sc_evdev_axis_normalize(999, 0, 255) == 32767);     /* clamp */
+    assert(sc_evdev_axis_normalize(5, 7, 7) == 0);  /* range vazio: neutro */
+
     puts("SUZY CUBE EVDEV UNIT: PASS");
     return 0;
 }
