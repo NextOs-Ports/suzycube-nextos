@@ -134,6 +134,21 @@ def main():
     copied = unpack_obb(stage)
     joined = join_splits(stage)
     shutil.rmtree(os.path.join(stage, PAYLOAD), ignore_errors=True)
+
+    # Mesma regua do checkpoint do NXExtract, mas com um erro que ensina o
+    # caminho: a distribuicao da Play traz o OBB SEPARADO do APK, e quem copia
+    # so o APK cai aqui -- os outros ports sao APK-unico e instalam, este nao.
+    for name in ("globalgamemanagers.assets", "sharedassets0.assets"):
+        path = os.path.join(stage, DATA, name)
+        if os.path.isfile(path) and os.path.getsize(path) >= 6000000:
+            continue
+        fail(
+            "the APK alone does not contain the full game data (%s is "
+            "missing). Copy the matching main.<n>.com.noodlecake.suzycube.obb "
+            "from your device (Android/obb/com.noodlecake.suzycube/) into "
+            "suzycube/gamedata next to the APK and launch the game again."
+            % name)
+
     print("merge-suzycube-data: %d arquivos do OBB, %d remontados"
           % (copied, joined), flush=True)
     return 0

@@ -27,9 +27,12 @@ Drop your lawfully acquired **ARM64 Suzy Cube APK** into:
 ports/suzycube/gamedata/
 ```
 
-If your copy also came with a separate `main.<n>.com.noodlecake.suzycube.obb`,
-put it in the same folder. Many builds carry the OBB inside the APK instead —
-the installer handles both without being told which one you have.
+**The Google Play build ships its data in a separate OBB file.** If your APK
+came with a `main.<n>.com.noodlecake.suzycube.obb` (on the phone it lives in
+`Android/obb/com.noodlecake.suzycube/`), you MUST copy it into the same folder
+— the APK alone is not enough. Some repacked builds carry the OBB inside the
+APK instead; the installer handles both without being told which one you have,
+and tells you in `suzycube/nxextract.log` if the data is incomplete.
 
 ## 3. Launch it once
 

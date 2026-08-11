@@ -37,7 +37,7 @@
     "runtime_env_path": "suzycube/nxextract/nxextract-runtime-env.sh",
     "runtime_env_sha256": "332919a9960d4317563b647f9932d1a4367da147a425fe2f78eafd706f01563f",
     "recipe_path": "suzycube/extractor.json",
-    "recipe_sha256": "401d07e8a41ecbc21933bef2615c3c96b2a28116c2e057bf67cd05535751ed75"
+    "recipe_sha256": "d0fb1725dca9b2b6cbb8a90f1a829a9c7e999b2f97d8cefb3617cef69edd0781"
   },
   "dependencies": [
     {
@@ -144,7 +144,7 @@
       "target": "suzycube/INSTALLATION.md",
       "kind": "payload",
       "mode": "0644",
-      "sha256": "8e88a476da8d7ca51edf36b0b401a953d6d57c336c648804f19caf0673ddd01e"
+      "sha256": "0c33e47181de51302e3b2b31ed57b9f4403dfcd19c39d298fbdb9e710a296d8b"
     },
     {
       "source": "NOTICE.md",
@@ -179,7 +179,7 @@
       "target": "suzycube/extractor.json",
       "kind": "nxextract-recipe",
       "mode": "0644",
-      "sha256": "401d07e8a41ecbc21933bef2615c3c96b2a28116c2e057bf67cd05535751ed75"
+      "sha256": "d0fb1725dca9b2b6cbb8a90f1a829a9c7e999b2f97d8cefb3617cef69edd0781"
     },
     {
       "source": "nxextract-version.txt",
@@ -200,7 +200,7 @@
       "target": "suzycube/nxextract/merge-suzycube-data.py",
       "kind": "payload",
       "mode": "0755",
-      "sha256": "bb4eb4838e78e339eab793a1e8f99251d2400c5e7119ced024adc809ebe898b3"
+      "sha256": "fdf61f62c87fa45e836cca273a1f207134d8e3783adf23008b677196d701d177"
     },
     {
       "source": "nxextract/nxextract-ui",

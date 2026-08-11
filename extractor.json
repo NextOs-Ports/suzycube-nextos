@@ -86,7 +86,11 @@
       "required": false,
       "source": {
         "kind": "entry_or_file",
-        "patterns": ["main.*.com.noodlecake.suzycube.obb"]
+        "patterns": [
+          "main.*.com.noodlecake.suzycube.obb",
+          "*.com.noodlecake.suzycube.obb",
+          "main.obb"
+        ]
       },
       "destination": "assets/.nxpayload/main.obb",
       "validate": {
