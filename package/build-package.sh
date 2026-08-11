@@ -12,10 +12,10 @@ PORT_DIR=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd -P)
 REPO_ROOT=$(CDPATH= cd -- "$PORT_DIR/../.." && pwd -P)
 NXRELEASE="$REPO_ROOT/framework/nxrelease/nxrelease.py"
 NXRELEASE_VERSION=0.2.5
-NXRELEASE_SHA256=b054af2d705f8c4505eee56c6d25a211c359122535eaa3a2ed9e42a1460ef336
+NXRELEASE_SHA256=097ef954261d7e31fb4a759caf2ebda9be02f069b1968e3f7b379d92f51e732f
 MANIFEST="$PORT_DIR/nxrelease.json"
 DESTINATION=${1:-"$PORT_DIR/.build/release"}
-ARCHIVE_NAME=SuzyCube.NextOS-v1.1.1.zip
+ARCHIVE_NAME=SuzyCube.NextOS-v1.1.3.zip
 
 fail() {
   printf 'suzy cube package error: %s\n' "$*" >&2
