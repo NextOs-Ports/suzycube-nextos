@@ -119,8 +119,11 @@ static struct {
     int stick_code[4];
     int stick_min[4];
     int stick_max[4];
+    /* Dpad declarado como ABS_HAT0X/Y; -1 = sem hat no proprio evdev. */
+    int hat_code[2];
 } evdev_pad = { .fd = -1, .trigger_code = { -1, -1 },
-                .stick_code = { -1, -1, -1, -1 } };
+                .stick_code = { -1, -1, -1, -1 },
+                .hat_code = { -1, -1 } };
 
 /* input_evdev.h mirrors these SDL values to stay SDL-free. */
 _Static_assert((int)SC_PAD_A == (int)SDL_CONTROLLER_BUTTON_A &&
@@ -178,6 +181,7 @@ static void close_evdev_pad(void)
         evdev_pad.stick_min[i] = 0;
         evdev_pad.stick_max[i] = 0;
     }
+    evdev_pad.hat_code[0] = evdev_pad.hat_code[1] = -1;
 }
 
 /* Os pads gpio-keys destes handhelds compartilham o GUID generico sem CRC
@@ -274,12 +278,52 @@ static void configure_semantic_axes(void)
             break;
     }
 
+    if (sc_evdev_test_bit(abs_bits, sizeof abs_bits / sizeof *abs_bits,
+                          ABS_HAT0X))
+        evdev_pad.hat_code[0] = ABS_HAT0X;
+    if (sc_evdev_test_bit(abs_bits, sizeof abs_bits / sizeof *abs_bits,
+                          ABS_HAT0Y))
+        evdev_pad.hat_code[1] = ABS_HAT0Y;
+
     if (summary[0])
         fprintf(stderr, "[sc/input] sticks do proprio evdev:%s\n", summary);
     else
         fprintf(stderr,
                 "[sc/input] sticks: sem eixo analogico proprio -> "
                 "neutros\n");
+    fprintf(stderr, "[sc/input] dpad-hat: %s\n",
+            evdev_pad.hat_code[0] >= 0 || evdev_pad.hat_code[1] >= 0
+            ? "ABS_HAT0 por snapshot do evdev" : "sem hat proprio");
+}
+
+/* O hat do SDL e' estado acumulado de EVENTOS: se o CFW perde a transicao de
+ * release do dpad (o mesmo defeito ja documentado para botoes), a direcao
+ * fica presa e o personagem anda sozinho ate' o proximo toque.  EVIOCGABS e'
+ * snapshot do kernel e se autocorrige no quadro seguinte, como o EVIOCGKEY
+ * dos botoes. */
+static void apply_semantic_hat(void)
+{
+    struct input_absinfo info;
+    if (evdev_pad.hat_code[0] >= 0) {
+        memset(&info, 0, sizeof info);
+        if (ioctl(evdev_pad.fd, EVIOCGABS(evdev_pad.hat_code[0]),
+                  &info) >= 0) {
+            if (info.value < 0)
+                buttons[SDL_CONTROLLER_BUTTON_DPAD_LEFT] = 1;
+            else if (info.value > 0)
+                buttons[SDL_CONTROLLER_BUTTON_DPAD_RIGHT] = 1;
+        }
+    }
+    if (evdev_pad.hat_code[1] >= 0) {
+        memset(&info, 0, sizeof info);
+        if (ioctl(evdev_pad.fd, EVIOCGABS(evdev_pad.hat_code[1]),
+                  &info) >= 0) {
+            if (info.value < 0)
+                buttons[SDL_CONTROLLER_BUTTON_DPAD_UP] = 1;
+            else if (info.value > 0)
+                buttons[SDL_CONTROLLER_BUTTON_DPAD_DOWN] = 1;
+        }
+    }
 }
 
 static void configure_evdev_mapping(void)
@@ -639,9 +683,13 @@ static void read_buttons(void)
     }
     if (controller && evdev_pad.semantic) {
         /* Mapping estrangeiro: nenhum botao do SDL_GameController e'
-         * confiavel; o snapshot evdev preenche tudo, e o hat cru cobre um
-         * dpad declarado como ABS_HAT em vez de BTN_DPAD_*. */
-        apply_joystick_hat(SDL_GameControllerGetJoystick(controller));
+         * confiavel; o snapshot evdev preenche tudo, e um dpad declarado
+         * como ABS_HAT vem por snapshot do proprio evdev -- o hat do SDL
+         * (estado de eventos) so' entra se o no evdev nao declarar hat. */
+        if (evdev_pad.hat_code[0] >= 0 || evdev_pad.hat_code[1] >= 0)
+            apply_semantic_hat();
+        else
+            apply_joystick_hat(SDL_GameControllerGetJoystick(controller));
     } else if (controller) {
         for (int i = 0; i < SDL_CONTROLLER_BUTTON_MAX; i++)
             buttons[i] = SDL_GameControllerGetButton(controller,

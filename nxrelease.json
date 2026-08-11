@@ -3,7 +3,7 @@
   "source_root": ".",
   "package": {
     "id": "suzycube",
-    "version": "1.1.5",
+    "version": "1.1.6",
     "profile": "universal-portmaster",
     "launcher": "Suzy Cube.sh",
     "launcher_chain": [
@@ -116,7 +116,7 @@
       "target": "suzycube/suzycube-nextos",
       "kind": "project-linux",
       "mode": "0755",
-      "sha256": "e918b9aeb0f77fb03cd68b255a86dc736e72611eddb2161caeae95e8cef163fb",
+      "sha256": "04f42a762aefe9cc542a74ce7c1bcb7fcbf82b578937be8beb4471bd770d835e",
       "architecture": "aarch64",
       "build_profile": "universal-low-glibc",
       "provenance": "build_universal.sh; pinned offline Debian Buster image sha256:036c7910ea53bc78cc213452afa92fa83d55de1c51ae54f315af58b5a41a45cf; target sysroot used for headers only",
@@ -165,7 +165,7 @@
       "target": "suzycube/version.txt",
       "kind": "payload",
       "mode": "0644",
-      "sha256": "1c60df040a80b6d2e3f56442b17d127d8620cd773873e6e1353362f989b1deca"
+      "sha256": "2f66e2158a2645e2455e374272c8deb113173dca586f9159f813519a50436c32"
     },
     {
       "source": "gamedata-template/README.txt",
