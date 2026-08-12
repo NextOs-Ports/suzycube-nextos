@@ -108,22 +108,19 @@ static struct {
     int fd;
     char path[64];
     unsigned long capabilities[SC_EVDEV_KEY_WORDS];
-    int logical_code[SDL_CONTROLLER_BUTTON_MAX];
     int face_positional;
     int trigger_happy_direct;
-    int semantic;
-    int trigger_code[2];
-    uint8_t trigger_state[2];
-    /* Sticks no modo semantico: codigo ABS + faixa medida do proprio evdev
-     * (LX, LY, RX, RY); -1 = sem eixo analogico real -> stick neutro. */
-    int stick_code[4];
-    int stick_min[4];
-    int stick_max[4];
-    /* Dpad declarado como ABS_HAT0X/Y; -1 = sem hat no proprio evdev. */
+    /* Nada pressionado no kernel neste quadro: o SDL nao pode ter botao ou
+     * gatilho preso. */
+    int idle;
+    /* Eixo do jogo -> codigo ABS do proprio evdev, resolvido pelo bind do
+     * mapping; -1 = eixo sem fonte analogica de verdade (fica neutro). */
+    int axis_code[SDL_CONTROLLER_AXIS_MAX];
+    int axis_min[SDL_CONTROLLER_AXIS_MAX];
+    int axis_max[SDL_CONTROLLER_AXIS_MAX];
+    /* Dpad declarado como ABS_HAT0X/Y e usado como hat pelo mapping. */
     int hat_code[2];
-} evdev_pad = { .fd = -1, .trigger_code = { -1, -1 },
-                .stick_code = { -1, -1, -1, -1 },
-                .hat_code = { -1, -1 } };
+} evdev_pad = { .fd = -1, .hat_code = { -1, -1 } };
 
 /* input_evdev.h mirrors these SDL values to stay SDL-free. */
 _Static_assert((int)SC_PAD_A == (int)SDL_CONTROLLER_BUTTON_A &&
@@ -169,41 +166,15 @@ static void close_evdev_pad(void)
     evdev_pad.fd = -1;
     evdev_pad.path[0] = '\0';
     memset(evdev_pad.capabilities, 0, sizeof evdev_pad.capabilities);
-    for (int i = 0; i < SDL_CONTROLLER_BUTTON_MAX; i++)
-        evdev_pad.logical_code[i] = -1;
     evdev_pad.face_positional = 0;
     evdev_pad.trigger_happy_direct = 0;
-    evdev_pad.semantic = 0;
-    evdev_pad.trigger_code[0] = evdev_pad.trigger_code[1] = -1;
-    evdev_pad.trigger_state[0] = evdev_pad.trigger_state[1] = 0;
-    for (int i = 0; i < 4; i++) {
-        evdev_pad.stick_code[i] = -1;
-        evdev_pad.stick_min[i] = 0;
-        evdev_pad.stick_max[i] = 0;
+    evdev_pad.idle = 0;
+    for (int i = 0; i < SDL_CONTROLLER_AXIS_MAX; i++) {
+        evdev_pad.axis_code[i] = -1;
+        evdev_pad.axis_min[i] = 0;
+        evdev_pad.axis_max[i] = 0;
     }
     evdev_pad.hat_code[0] = evdev_pad.hat_code[1] = -1;
-}
-
-/* Os pads gpio-keys destes handhelds compartilham o GUID generico sem CRC
- * (VID/PID 0001:0001): um mapping SDL escrito para OUTRO aparelho (nome do
- * mapping != nome do joystick) casa por GUID e desloca todos os ordinais --
- * foi assim que no RG35XXSP/muOS o mapping "Deeplay-keys" do R36 fez L2+R2
- * virarem SELECT+START e sairem do jogo.  Pads USB/BT reais tem VID/PID
- * proprios e nunca entram aqui. */
-static int sdl_mapping_is_foreign(void)
-{
-    if (!controller)
-        return 0;
-    SDL_Joystick *joy = SDL_GameControllerGetJoystick(controller);
-    if (!joy)
-        return 0;
-    if (SDL_JoystickGetVendor(joy) != 0x0001 ||
-        SDL_JoystickGetProduct(joy) != 0x0001)
-        return 0;
-    const char *mapping_name = SDL_GameControllerName(controller);
-    const char *device_name = SDL_JoystickName(joy);
-    return mapping_name && device_name &&
-           strcmp(mapping_name, device_name) != 0;
 }
 
 static const char *face_policy_name(void)
@@ -228,72 +199,77 @@ static int has_positional_face_codes(const unsigned long *capabilities)
            sc_evdev_test_bit(capabilities, SC_EVDEV_KEY_WORDS, BTN_WEST);
 }
 
-/* Os binds de eixo de um mapping estrangeiro apontam para eixos que este
- * aparelho nao tem (foi assim que no RG35XXSP/muOS o "stick esquerdo" ficou
- * cravado fora do centro e o personagem andava sozinho).  No modo semantico a
- * unica fonte confiavel e' o proprio evdev: ABS_X/Y para o stick esquerdo,
- * ABS_RX/RY (ou ABS_Z/RZ) para o direito, e so' quando o absinfo tem cara de
- * stick de verdade -- eixo digital/degenerado deixa o stick neutro. */
-static void configure_semantic_axes(void)
+/* O mapping do firmware diz QUAL eixo do pad e' o stick esquerdo (leftx:a0);
+ * o evdev diz o que aquele eixo e' de verdade.  Cruzar os dois e' o unico
+ * jeito portavel: em aparelho sem ABS_X/Y (RG40XX-H, cujo stick esquerdo e'
+ * ABS_RX/RY) o bind acerta, e em aparelho sem stick nenhum o absinfo
+ * degenerado (span < 16, dpad-como-ABS) deixa o eixo neutro em vez de
+ * normalizar fora do centro -- que era o "personagem anda sozinho". */
+static void configure_axes(void)
 {
-    static const int primary[4] = { ABS_X, ABS_Y, ABS_RX, ABS_RY };
-    static const int alternate[4] = { -1, -1, ABS_Z, ABS_RZ };
-    unsigned long abs_bits[(ABS_MAX + SC_EVDEV_WORD_BITS) /
-                           SC_EVDEV_WORD_BITS];
+    unsigned long abs_bits[SC_EVDEV_ABS_WORDS];
     memset(abs_bits, 0, sizeof abs_bits);
     if (ioctl(evdev_pad.fd, EVIOCGBIT(EV_ABS, sizeof abs_bits),
               abs_bits) < 0) {
-        fprintf(stderr,
-                "[sc/input] sticks: EV_ABS ilegivel; sticks neutros\n");
+        fprintf(stderr, "[sc/input] eixos: EV_ABS ilegivel; ficam com o SDL\n");
         return;
     }
 
-    char summary[128] = "";
+    static const char *label[SDL_CONTROLLER_AXIS_MAX] = {
+        "LX", "LY", "RX", "RY", "LT", "RT"
+    };
+    /* O PortMaster publica quantos sticks o aparelho tem; quando ele diz
+     * zero, nenhum bind de eixo do mapping pode virar movimento. */
+    const char *sticks_hint = getenv("NXINPUT_ANALOG_STICKS_HINT");
+    const int sticks_declared = sticks_hint && *sticks_hint
+                              ? atoi(sticks_hint) : -1;
+    char summary[192] = "";
     size_t used = 0;
-    static const char *label[4] = { "LX", "LY", "RX", "RY" };
-    for (int i = 0; i < 4; i++) {
-        int code = -1;
-        if (primary[i] >= 0 &&
-            sc_evdev_test_bit(abs_bits, sizeof abs_bits / sizeof *abs_bits,
-                              primary[i]))
-            code = primary[i];
-        else if (alternate[i] >= 0 &&
-                 sc_evdev_test_bit(abs_bits,
-                                   sizeof abs_bits / sizeof *abs_bits,
-                                   alternate[i]))
-            code = alternate[i];
-
+    for (int i = 0; i < SDL_CONTROLLER_AXIS_MAX; i++) {
+        if (!controller)
+            break;
+        SDL_GameControllerButtonBind bind =
+            SDL_GameControllerGetBindForAxis(controller,
+                                             (SDL_GameControllerAxis)i);
+        if (bind.bindType != SDL_CONTROLLER_BINDTYPE_AXIS)
+            continue;   /* gatilho digital (b<N>) segue pelo caminho do SDL */
+        const int code = sc_evdev_abs_code_for_sdl_axis(
+            abs_bits, SC_EVDEV_ABS_WORDS, bind.value.axis);
         struct input_absinfo info;
         memset(&info, 0, sizeof info);
-        if (code >= 0 && ioctl(evdev_pad.fd, EVIOCGABS(code), &info) >= 0 &&
-            sc_evdev_axis_is_analog(info.minimum, info.maximum)) {
-            evdev_pad.stick_code[i] = code;
-            evdev_pad.stick_min[i] = info.minimum;
-            evdev_pad.stick_max[i] = info.maximum;
-            used += (size_t)snprintf(summary + used, sizeof summary - used,
-                                     " %s=ABS%d[%d..%d]", label[i], code,
-                                     info.minimum, info.maximum);
+        const int is_stick = i <= SDL_CONTROLLER_AXIS_RIGHTY;
+        const int usable = code >= 0 &&
+            !(is_stick && sticks_declared == 0) &&
+            ioctl(evdev_pad.fd, EVIOCGABS(code), &info) >= 0 &&
+            sc_evdev_axis_is_analog(info.minimum, info.maximum);
+        if (usable) {
+            evdev_pad.axis_code[i] = code;
+            evdev_pad.axis_min[i] = info.minimum;
+            evdev_pad.axis_max[i] = info.maximum;
         }
-        if (used >= sizeof summary)
-            break;
+        if (used < sizeof summary)
+            used += (size_t)snprintf(
+                summary + used, sizeof summary - used,
+                usable ? " %s=a%d/ABS%d[%d..%d]" : " %s=a%d/NEUTRO",
+                label[i], bind.value.axis, code, info.minimum, info.maximum);
     }
+    fprintf(stderr, "[sc/input] eixos:%s\n", summary[0] ? summary : " nenhum");
 
-    if (sc_evdev_test_bit(abs_bits, sizeof abs_bits / sizeof *abs_bits,
-                          ABS_HAT0X))
-        evdev_pad.hat_code[0] = ABS_HAT0X;
-    if (sc_evdev_test_bit(abs_bits, sizeof abs_bits / sizeof *abs_bits,
-                          ABS_HAT0Y))
-        evdev_pad.hat_code[1] = ABS_HAT0Y;
-
-    if (summary[0])
-        fprintf(stderr, "[sc/input] sticks do proprio evdev:%s\n", summary);
-    else
-        fprintf(stderr,
-                "[sc/input] sticks: sem eixo analogico proprio -> "
-                "neutros\n");
-    fprintf(stderr, "[sc/input] dpad-hat: %s\n",
+    /* O dpad so' vem do hat do kernel se o mapping tambem o declarar como
+     * hat -- em pad que manda dpad por botao, quem manda continua o SDL. */
+    SDL_GameControllerButtonBind up = { .bindType = SDL_CONTROLLER_BINDTYPE_NONE };
+    if (controller)
+        up = SDL_GameControllerGetBindForButton(controller,
+                                                SDL_CONTROLLER_BUTTON_DPAD_UP);
+    if (up.bindType == SDL_CONTROLLER_BINDTYPE_HAT) {
+        if (sc_evdev_test_bit(abs_bits, SC_EVDEV_ABS_WORDS, ABS_HAT0X))
+            evdev_pad.hat_code[0] = ABS_HAT0X;
+        if (sc_evdev_test_bit(abs_bits, SC_EVDEV_ABS_WORDS, ABS_HAT0Y))
+            evdev_pad.hat_code[1] = ABS_HAT0Y;
+    }
+    fprintf(stderr, "[sc/input] dpad: %s\n",
             evdev_pad.hat_code[0] >= 0 || evdev_pad.hat_code[1] >= 0
-            ? "ABS_HAT0 por snapshot do evdev" : "sem hat proprio");
+            ? "ABS_HAT0 por snapshot do evdev" : "pelo mapping do SDL");
 }
 
 /* O hat do SDL e' estado acumulado de EVENTOS: se o CFW perde a transicao de
@@ -301,7 +277,7 @@ static void configure_semantic_axes(void)
  * fica presa e o personagem anda sozinho ate' o proximo toque.  EVIOCGABS e'
  * snapshot do kernel e se autocorrige no quadro seguinte, como o EVIOCGKEY
  * dos botoes. */
-static void apply_semantic_hat(void)
+static void apply_evdev_hat(void)
 {
     struct input_absinfo info;
     if (evdev_pad.hat_code[0] >= 0) {
@@ -328,35 +304,8 @@ static void apply_semantic_hat(void)
 
 static void configure_evdev_mapping(void)
 {
-    if (controller && sdl_mapping_is_foreign() &&
-        sc_evdev_semantic_codes(evdev_pad.capabilities, SC_EVDEV_KEY_WORDS,
-                                evdev_pad.logical_code,
-                                SDL_CONTROLLER_BUTTON_MAX)) {
-        evdev_pad.semantic = 1;
-        evdev_pad.trigger_code[0] = sc_evdev_test_bit(
-            evdev_pad.capabilities, SC_EVDEV_KEY_WORDS, BTN_TL2)
-            ? BTN_TL2 : -1;
-        evdev_pad.trigger_code[1] = sc_evdev_test_bit(
-            evdev_pad.capabilities, SC_EVDEV_KEY_WORDS, BTN_TR2)
-            ? BTN_TR2 : -1;
-        configure_semantic_axes();
-        fprintf(stderr,
-                "[sc/input] mapping SDL '%s' e' de outro aparelho (GUID "
-                "generico); pad '%s' mapeado pelos keycodes do proprio "
-                "evdev\n",
-                SDL_GameControllerName(controller),
-                SDL_JoystickName(SDL_GameControllerGetJoystick(controller)));
-        fprintf(stderr,
-                "[sc/input] snapshot autoritativo %s; "
-                "face=keycodes-semanticos (politica=%s)\n",
-                evdev_pad.path, face_policy_name());
-    } else if (controller) {
-        for (int i = 0; i < SDL_CONTROLLER_BUTTON_MAX; i++) {
-            const int ordinal = controller_button_ordinal(
-                (SDL_GameControllerButton)i);
-            evdev_pad.logical_code[i] = sc_evdev_code_for_sdl_button(
-                evdev_pad.capabilities, SC_EVDEV_KEY_WORDS, ordinal);
-        }
+    if (controller) {
+        configure_axes();
 
         const int bind_a = controller_button_ordinal(SDL_CONTROLLER_BUTTON_A);
         const int bind_b = controller_button_ordinal(SDL_CONTROLLER_BUTTON_B);
@@ -383,16 +332,7 @@ static void configure_evdev_mapping(void)
                 "[sc/input] snapshot autoritativo %s; face=%s (politica=%s)\n",
                 evdev_pad.path, effective, face_policy_name());
     } else {
-        for (int ordinal = 0;
-             ordinal < (int)(sizeof raw_to_pad / sizeof *raw_to_pad);
-             ordinal++) {
-            const int logical = raw_to_pad[ordinal];
-            if (logical >= 0)
-                evdev_pad.logical_code[logical] =
-                    sc_evdev_code_for_sdl_button(
-                        evdev_pad.capabilities, SC_EVDEV_KEY_WORDS, ordinal);
-        }
-        fprintf(stderr, "[sc/input] snapshot autoritativo %s; pad cru\n",
+        fprintf(stderr, "[sc/input] %s: pad cru, guarda antitravamento\n",
                 evdev_pad.path);
     }
 
@@ -561,15 +501,16 @@ static void apply_evdev_snapshot(void)
         return;
     }
 
-    sc_evdev_apply_button_snapshot(
-        state, SC_EVDEV_KEY_WORDS, evdev_pad.logical_code,
-        SDL_CONTROLLER_BUTTON_MAX, buttons);
-
-    for (int t = 0; t < 2; t++)
-        evdev_pad.trigger_state[t] =
-            evdev_pad.trigger_code[t] >= 0 &&
-            sc_evdev_test_bit(state, SC_EVDEV_KEY_WORDS,
-                              evdev_pad.trigger_code[t]);
+    /* Guarda antitravamento.  Traduzir ordinal do SDL -> keycode aqui era o
+     * defeito de fundo: a ordem em que o firmware numera os botoes NAO e'
+     * portavel (no muOS as teclas nao-gamepad vem antes do bloco gamepad e
+     * TUDO desloca).  O unico veredito que dispensa essa numeracao e' "o
+     * kernel nao tem NADA pressionado" -- e e' justamente ele que cura o
+     * botao/direcao preso por release perdido. */
+    evdev_pad.idle = !sc_evdev_any_key_pressed(state, evdev_pad.capabilities,
+                                               SC_EVDEV_KEY_WORDS);
+    if (evdev_pad.idle)
+        memset(buttons, 0, sizeof buttons);
 
     if (evdev_pad.trigger_happy_direct) {
         buttons[SDL_CONTROLLER_BUTTON_BACK] = sc_evdev_test_bit(
@@ -606,17 +547,17 @@ static void request_neutral_motion(void)
     reset_motion_filters();
 }
 
-static Sint16 semantic_axis_value(int index)
+/* Eixo pelo snapshot do kernel, normalizado pela faixa medida do proprio
+ * aparelho: nao acumula evento perdido e nao herda a escala nominal do SDL,
+ * que em stick barato deixa o repouso longe do centro. */
+static Sint16 evdev_axis_value(SDL_GameControllerAxis axis)
 {
-    if (evdev_pad.fd < 0 || evdev_pad.stick_code[index] < 0)
-        return 0;
     struct input_absinfo info;
     memset(&info, 0, sizeof info);
-    if (ioctl(evdev_pad.fd, EVIOCGABS(evdev_pad.stick_code[index]),
-              &info) < 0)
+    if (ioctl(evdev_pad.fd, EVIOCGABS(evdev_pad.axis_code[axis]), &info) < 0)
         return 0;
-    return sc_evdev_axis_normalize(info.value, evdev_pad.stick_min[index],
-                                   evdev_pad.stick_max[index]);
+    return sc_evdev_axis_normalize(info.value, evdev_pad.axis_min[axis],
+                                   evdev_pad.axis_max[axis]);
 }
 
 static Sint16 axis_raw(SDL_GameControllerAxis axis)
@@ -625,20 +566,15 @@ static Sint16 axis_raw(SDL_GameControllerAxis axis)
         return 0;
 
     Sint16 value = 0;
-    if (controller && evdev_pad.semantic) {
-        /* Mapping estrangeiro: os binds de eixo tambem sao dele.  O proprio
-         * evdev e' a fonte; gatilho ja e' coberto por BTN_TL2/TR2. */
-        switch (axis) {
-        case SDL_CONTROLLER_AXIS_LEFTX:  return semantic_axis_value(0);
-        case SDL_CONTROLLER_AXIS_LEFTY:  return semantic_axis_value(1);
-        case SDL_CONTROLLER_AXIS_RIGHTX: return semantic_axis_value(2);
-        case SDL_CONTROLLER_AXIS_RIGHTY: return semantic_axis_value(3);
-        default: return 0;
-        }
-    }
     if (controller) {
         SDL_GameControllerButtonBind bind =
             SDL_GameControllerGetBindForAxis(controller, axis);
+        if (bind.bindType == SDL_CONTROLLER_BINDTYPE_AXIS &&
+            evdev_pad.fd >= 0)
+            /* O evdev ja disse se esse eixo e' analogico de verdade: quando
+             * nao e' (dpad-como-ABS, aparelho sem stick), fica neutro em vez
+             * de virar drift. */
+            return evdev_pad.axis_code[axis] >= 0 ? evdev_axis_value(axis) : 0;
         if (bind.bindType != SDL_CONTROLLER_BINDTYPE_NONE)
             value = SDL_GameControllerGetAxis(controller, axis);
     } else if (raw_joystick) {
@@ -678,22 +614,25 @@ static void read_buttons(void)
     memcpy(previous, buttons, sizeof buttons);
     memset(buttons, 0, sizeof buttons);
     if (!input_active) {
-        evdev_pad.trigger_state[0] = evdev_pad.trigger_state[1] = 0;
+        evdev_pad.idle = 1;
         return;
     }
-    if (controller && evdev_pad.semantic) {
-        /* Mapping estrangeiro: nenhum botao do SDL_GameController e'
-         * confiavel; o snapshot evdev preenche tudo, e um dpad declarado
-         * como ABS_HAT vem por snapshot do proprio evdev -- o hat do SDL
-         * (estado de eventos) so' entra se o no evdev nao declarar hat. */
-        if (evdev_pad.hat_code[0] >= 0 || evdev_pad.hat_code[1] >= 0)
-            apply_semantic_hat();
-        else
-            apply_joystick_hat(SDL_GameControllerGetJoystick(controller));
-    } else if (controller) {
+    if (controller) {
+        /* O mapping do firmware e' a autoridade do layout -- ele e' por
+         * aparelho e carrega ate' a escolha retro/modern do usuario. */
         for (int i = 0; i < SDL_CONTROLLER_BUTTON_MAX; i++)
             buttons[i] = SDL_GameControllerGetButton(controller,
                                                      (SDL_GameControllerButton)i);
+        /* Dpad-como-ABS_HAT: o kernel manda no lugar do hat do SDL, que e'
+         * estado acumulado de eventos e fica preso quando o CFW perde um
+         * release. */
+        if (evdev_pad.hat_code[0] >= 0 || evdev_pad.hat_code[1] >= 0) {
+            buttons[SDL_CONTROLLER_BUTTON_DPAD_UP] = 0;
+            buttons[SDL_CONTROLLER_BUTTON_DPAD_DOWN] = 0;
+            buttons[SDL_CONTROLLER_BUTTON_DPAD_LEFT] = 0;
+            buttons[SDL_CONTROLLER_BUTTON_DPAD_RIGHT] = 0;
+            apply_evdev_hat();
+        }
     } else if (raw_joystick) {
         int n = SDL_JoystickNumButtons(raw_joystick);
         for (int i = 0; i < n && i < (int)(sizeof raw_to_pad /
@@ -1048,11 +987,11 @@ void sc_input_poll(void *env, void *player, unsigned long frame)
     float rt = nxinput_core_trigger(
         axis_raw(SDL_CONTROLLER_AXIS_TRIGGERRIGHT),
         SC_INPUT_TRIGGER_DEADZONE);
-    if (evdev_pad.semantic) {
-        /* O bind de gatilho pertence ao mapping estrangeiro; o estado
-         * digital de BTN_TL2/TR2 do proprio evdev e' a fonte. */
-        lt = evdev_pad.trigger_state[0] ? 1.0f : 0.0f;
-        rt = evdev_pad.trigger_state[1] ? 1.0f : 0.0f;
+    if (evdev_pad.fd >= 0 && evdev_pad.idle) {
+        /* Kernel sem nada pressionado: gatilho digital preso pelo SDL nao
+         * pode sobreviver ao quadro. */
+        lt = 0.0f;
+        rt = 0.0f;
     }
 
     /* Gatilhos analogicos tambem geram L2/R2 digitais. */

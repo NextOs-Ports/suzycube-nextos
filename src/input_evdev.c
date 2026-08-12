@@ -12,28 +12,27 @@ int sc_evdev_test_bit(const unsigned long *bits, size_t words, int code)
 }
 
 /* SDL's Linux joystick backend numbers EV_KEY buttons in two passes: gamepad
- * codes first, then every lower EV_KEY code. Mirroring that exact order
- * lets the adapter relate an SDL mapping (b0, b1, ...) to the kernel bitmap
- * without relying on a controller name or a firmware database. */
-static int visit_button_codes(const unsigned long *bits, size_t words,
-                              int wanted_code, int wanted_index,
-                              int return_code)
+ * codes first, then every lower EV_KEY code -- but that order is NOT portable
+ * (muOS numbers the non-gamepad keys first, which shifts every b<N>).  So the
+ * reconstruction is used only where a disagreement is harmless: the face
+ * classifier below bails out to "unknown" and changes nothing.  Never derive
+ * a keycode from an SDL ordinal to read button state. */
+static int sc_evdev_button_index(const unsigned long *bits, size_t words,
+                                 int wanted_code)
 {
     int index = 0;
     for (int code = BTN_JOYSTICK; code < KEY_MAX; code++) {
         if (!sc_evdev_test_bit(bits, words, code))
             continue;
-        if ((wanted_code >= 0 && code == wanted_code) ||
-            (wanted_index >= 0 && index == wanted_index))
-            return return_code ? code : index;
+        if (code == wanted_code)
+            return index;
         index++;
     }
     for (int code = 0; code < BTN_JOYSTICK; code++) {
         if (!sc_evdev_test_bit(bits, words, code))
             continue;
-        if ((wanted_code >= 0 && code == wanted_code) ||
-            (wanted_index >= 0 && index == wanted_index))
-            return return_code ? code : index;
+        if (code == wanted_code)
+            return index;
         index++;
     }
     return -1;
@@ -44,63 +43,45 @@ int sc_evdev_sdl_button_index(const unsigned long *bits, size_t words,
 {
     if (!sc_evdev_test_bit(bits, words, code))
         return -1;
-    return visit_button_codes(bits, words, code, -1, 0);
+    return sc_evdev_button_index(bits, words, code);
 }
 
-int sc_evdev_code_for_sdl_button(const unsigned long *bits, size_t words,
-                                 int button_index)
+/* Ao contrario dos botoes -- cuja numeracao depende da ordem de varredura do
+ * SDL e por isso NAO e' portavel entre firmwares --, o eixo de indice N e' o
+ * N-esimo codigo EV_ABS declarado em ordem crescente, pulando ABS_HAT0..3
+ * (que o SDL publica como hat, nao como eixo).  Essa regra e' estavel, e e'
+ * o que liga um bind "leftx:a0" do mapping ao codigo ABS de verdade. */
+int sc_evdev_abs_code_for_sdl_axis(const unsigned long *abs_bits, size_t words,
+                                   int axis_index)
 {
-    if (button_index < 0)
+    if (!abs_bits || axis_index < 0)
         return -1;
-    return visit_button_codes(bits, words, -1, button_index, 1);
+    int index = 0;
+    for (int code = 0; code <= ABS_MAX; code++) {
+        if (code >= ABS_HAT0X && code <= ABS_HAT3Y)
+            continue;
+        if (!sc_evdev_test_bit(abs_bits, words, code))
+            continue;
+        if (index == axis_index)
+            return code;
+        index++;
+    }
+    return -1;
 }
 
-void sc_evdev_apply_button_snapshot(const unsigned long *state, size_t words,
-                                    const int *logical_codes, size_t count,
-                                    uint8_t *buttons)
+/* Guarda antitravamento: o unico veredito que o snapshot do kernel pode dar
+ * sem conhecer a numeracao do firmware e' "nada esta' pressionado".  Quando
+ * ele diz isso e o SDL ainda acha que tem botao preso (release perdido pelo
+ * CFW), o estado do SDL esta' errado e e' zerado. */
+int sc_evdev_any_key_pressed(const unsigned long *state,
+                             const unsigned long *capabilities, size_t words)
 {
-    if (!logical_codes || !buttons)
-        return;
-    for (size_t i = 0; i < count; i++) {
-        if (logical_codes[i] >= 0)
-            buttons[i] = (uint8_t)sc_evdev_test_bit(
-                state, words, logical_codes[i]);
-    }
-}
-
-/* The gpio-keys pads of these handhelds all share the CRC-less generic SDL
- * GUID (bus 0x19, VID/PID 0001:0001), so a firmware mapping written for one
- * device can be applied to another whose key list differs -- every b<N>
- * ordinal then lands on the wrong physical button.  When that happens the
- * kernel keycodes themselves are the only trustworthy layout: BTN_SOUTH is
- * the south face button on every one of these drivers.  Returns 0 (and
- * writes nothing) unless all four face codes are declared. */
-int sc_evdev_semantic_codes(const unsigned long *bits, size_t words,
-                            int *logical_codes, size_t count)
-{
-    static const int semantic[SC_PAD_COUNT] = {
-        [SC_PAD_A] = BTN_SOUTH, [SC_PAD_B] = BTN_EAST,
-        [SC_PAD_X] = BTN_WEST, [SC_PAD_Y] = BTN_NORTH,
-        [SC_PAD_BACK] = BTN_SELECT, [SC_PAD_GUIDE] = BTN_MODE,
-        [SC_PAD_START] = BTN_START,
-        [SC_PAD_LEFTSTICK] = BTN_THUMBL, [SC_PAD_RIGHTSTICK] = BTN_THUMBR,
-        [SC_PAD_LEFTSHOULDER] = BTN_TL, [SC_PAD_RIGHTSHOULDER] = BTN_TR,
-        [SC_PAD_DPAD_UP] = BTN_DPAD_UP, [SC_PAD_DPAD_DOWN] = BTN_DPAD_DOWN,
-        [SC_PAD_DPAD_LEFT] = BTN_DPAD_LEFT,
-        [SC_PAD_DPAD_RIGHT] = BTN_DPAD_RIGHT,
-    };
-    if (!logical_codes ||
-        !sc_evdev_test_bit(bits, words, BTN_SOUTH) ||
-        !sc_evdev_test_bit(bits, words, BTN_EAST) ||
-        !sc_evdev_test_bit(bits, words, BTN_NORTH) ||
-        !sc_evdev_test_bit(bits, words, BTN_WEST))
-        return 0;
-    for (size_t i = 0; i < count; i++) {
-        const int code = i < SC_PAD_COUNT ? semantic[i] : 0;
-        logical_codes[i] = code && sc_evdev_test_bit(bits, words, code)
-                         ? code : -1;
-    }
-    return 1;
+    if (!state || !capabilities)
+        return 1;
+    for (size_t i = 0; i < words; i++)
+        if (state[i] & capabilities[i])
+            return 1;
+    return 0;
 }
 
 /* Um dpad declarado como eixo ABS tem range minusculo (-1..1, 0..2); um stick

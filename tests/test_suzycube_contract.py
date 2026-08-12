@@ -159,9 +159,18 @@ def check_input_recovery_contract():
     policy = (PORT / "src/input_policy.h").read_text(encoding="utf-8")
     require("EVIOCGKEY" in source,
             "input must resample current evdev key state")
-    require("sc_evdev_apply_button_snapshot" in source and
-            "sc_evdev_apply_button_snapshot" in helper,
-            "authoritative button snapshot helper is disconnected")
+    require("sc_evdev_any_key_pressed" in source and
+            "sc_evdev_any_key_pressed" in helper,
+            "idle guard against a stuck SDL button state is disconnected")
+    # A numeracao de botao do firmware nao e' portavel (o muOS numera as
+    # teclas nao-gamepad antes do bloco gamepad): ler estado de botao por
+    # ordinal traduzido em keycode foi o defeito de campo v1.1.2-v1.1.6.
+    require("sc_evdev_code_for_sdl_button" not in source and
+            "sc_evdev_code_for_sdl_button" not in helper,
+            "button state must never be read through an SDL ordinal")
+    require("sc_evdev_abs_code_for_sdl_axis" in source and
+            "SDL_CONTROLLER_BINDTYPE_AXIS" in source,
+            "stick axes must be resolved through the firmware mapping bind")
     require("SC_FACE_LAYOUT" in source and
             "SC_EVDEV_FACE_NINTENDO_LABELS" in source,
             "capability-based face normalization is missing")

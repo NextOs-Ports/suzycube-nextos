@@ -41,16 +41,6 @@ int main(void)
                                      KEY_ENTER) == 12);
     assert(sc_evdev_sdl_button_index(bits, SC_EVDEV_KEY_WORDS, BTN_0) == 13);
 
-    assert(sc_evdev_code_for_sdl_button(bits, SC_EVDEV_KEY_WORDS, 0) ==
-           BTN_SOUTH);
-    assert(sc_evdev_code_for_sdl_button(bits, SC_EVDEV_KEY_WORDS, 11) ==
-           BTN_TRIGGER_HAPPY2);
-    assert(sc_evdev_code_for_sdl_button(bits, SC_EVDEV_KEY_WORDS, 12) ==
-           KEY_ENTER);
-    assert(sc_evdev_code_for_sdl_button(bits, SC_EVDEV_KEY_WORDS, 13) ==
-           BTN_0);
-    assert(sc_evdev_code_for_sdl_button(bits, SC_EVDEV_KEY_WORDS, 14) == -1);
-
     assert(sc_evdev_classify_face_mapping(
                bits, SC_EVDEV_KEY_WORDS, 0, 1, 3, 2) ==
            SC_EVDEV_FACE_XBOX_POSITIONAL);
@@ -61,65 +51,55 @@ int main(void)
                bits, SC_EVDEV_KEY_WORDS, 0, 1, 2, 3) ==
            SC_EVDEV_FACE_UNKNOWN);
 
-    /* A stale SDL DPAD_DOWN state is cleared by a neutral kernel snapshot,
-     * then asserted again only while the kernel says the key is held. */
+    /* Guarda antitravamento: o kernel so' pode dizer "nada pressionado",
+     * e' esse veredito que cura o botao preso por release perdido. */
     unsigned long state[SC_EVDEV_KEY_WORDS];
-    int logical_codes[] = { BTN_DPAD_DOWN, BTN_SOUTH, -1 };
-    uint8_t logical_buttons[] = { 1, 1, 1 };
     memset(state, 0, sizeof state);
-    sc_evdev_apply_button_snapshot(state, SC_EVDEV_KEY_WORDS,
-                                   logical_codes, 3, logical_buttons);
-    assert(logical_buttons[0] == 0);
-    assert(logical_buttons[1] == 0);
-    assert(logical_buttons[2] == 1); /* Unmapped controls stay with SDL. */
-    set_bit(state, BTN_DPAD_DOWN);
-    sc_evdev_apply_button_snapshot(state, SC_EVDEV_KEY_WORDS,
-                                   logical_codes, 3, logical_buttons);
-    assert(logical_buttons[0] == 1);
+    assert(sc_evdev_any_key_pressed(state, bits, SC_EVDEV_KEY_WORDS) == 0);
+    set_bit(state, BTN_SOUTH);
+    assert(sc_evdev_any_key_pressed(state, bits, SC_EVDEV_KEY_WORDS) == 1);
+    /* Tecla fora das capacidades declaradas nao segura a guarda. */
+    memset(state, 0, sizeof state);
+    set_bit(state, KEY_POWER);
+    assert(sc_evdev_any_key_pressed(state, bits, SC_EVDEV_KEY_WORDS) == 0);
 
-    /* Foreign-mapping recovery: an muOS-Keys-style pad (same generic GUID as
-     * the R36 Deeplay-keys, different key list) must map by keycode
-     * semantics, ignoring the foreign mapping's ordinals entirely. */
-    unsigned long muos[SC_EVDEV_KEY_WORDS];
-    memset(muos, 0, sizeof muos);
-    const int muos_codes[] = {
-        BTN_SOUTH, BTN_EAST, BTN_NORTH, BTN_WEST,
-        BTN_TL, BTN_TR, BTN_TL2, BTN_TR2,
-        BTN_SELECT, BTN_START, BTN_MODE, BTN_THUMBL, BTN_THUMBR,
-        KEY_VOLUMEDOWN, KEY_VOLUMEUP,
-    };
-    for (size_t i = 0; i < sizeof muos_codes / sizeof *muos_codes; i++)
-        set_bit(muos, muos_codes[i]);
-    int semantic[SC_PAD_COUNT + 1];
-    memset(semantic, 0x7f, sizeof semantic);
-    assert(sc_evdev_semantic_codes(muos, SC_EVDEV_KEY_WORDS,
-                                   semantic, SC_PAD_COUNT + 1) == 1);
-    assert(semantic[SC_PAD_A] == BTN_SOUTH);
-    assert(semantic[SC_PAD_B] == BTN_EAST);
-    assert(semantic[SC_PAD_X] == BTN_WEST);
-    assert(semantic[SC_PAD_Y] == BTN_NORTH);
-    assert(semantic[SC_PAD_BACK] == BTN_SELECT);
-    assert(semantic[SC_PAD_START] == BTN_START);
-    assert(semantic[SC_PAD_GUIDE] == BTN_MODE);
-    assert(semantic[SC_PAD_LEFTSHOULDER] == BTN_TL);
-    assert(semantic[SC_PAD_RIGHTSHOULDER] == BTN_TR);
-    assert(semantic[SC_PAD_LEFTSTICK] == BTN_THUMBL);
-    assert(semantic[SC_PAD_RIGHTSTICK] == BTN_THUMBR);
-    assert(semantic[SC_PAD_DPAD_UP] == -1);   /* dpad ausente fica com SDL */
-    assert(semantic[SC_PAD_COUNT] == -1);     /* alem dos 15: sem semantica */
+    /* Eixo do mapping -> codigo ABS real.  Caso RG40XX-H/muOS: o aparelho
+     * NAO declara ABS_X/Y, entao "leftx:a0" e' ABS_RX -- procurar ABS_X para
+     * o stick esquerdo (v1.1.5/v1.1.6) deixava o stick morto. */
+    unsigned long abs_bits[SC_EVDEV_ABS_WORDS];
+    memset(abs_bits, 0, sizeof abs_bits);
+    set_bit(abs_bits, ABS_RX);
+    set_bit(abs_bits, ABS_RY);
+    set_bit(abs_bits, ABS_RZ);
+    set_bit(abs_bits, ABS_THROTTLE);
+    set_bit(abs_bits, ABS_HAT0X);
+    set_bit(abs_bits, ABS_HAT0Y);
+    assert(sc_evdev_abs_code_for_sdl_axis(abs_bits, SC_EVDEV_ABS_WORDS, 0) ==
+           ABS_RX);
+    assert(sc_evdev_abs_code_for_sdl_axis(abs_bits, SC_EVDEV_ABS_WORDS, 1) ==
+           ABS_RY);
+    /* Ordem crescente de codigo: ABS_RZ (0x05) antes de ABS_THROTTLE (0x06). */
+    assert(sc_evdev_abs_code_for_sdl_axis(abs_bits, SC_EVDEV_ABS_WORDS, 2) ==
+           ABS_RZ);
+    assert(sc_evdev_abs_code_for_sdl_axis(abs_bits, SC_EVDEV_ABS_WORDS, 3) ==
+           ABS_THROTTLE);
+    /* O hat nunca conta como eixo: e' hat no SDL. */
+    assert(sc_evdev_abs_code_for_sdl_axis(abs_bits, SC_EVDEV_ABS_WORDS, 4) ==
+           -1);
+    assert(sc_evdev_abs_code_for_sdl_axis(abs_bits, SC_EVDEV_ABS_WORDS, -1) ==
+           -1);
 
-    /* Sem os quatro botoes de face nao ha layout confiavel: nada muda. */
-    unsigned long faceless[SC_EVDEV_KEY_WORDS];
-    memset(faceless, 0, sizeof faceless);
-    set_bit(faceless, BTN_SOUTH);
-    set_bit(faceless, BTN_EAST);
-    int untouched[SC_PAD_COUNT];
-    memset(untouched, 0x55, sizeof untouched);
-    int untouched_copy[SC_PAD_COUNT];
-    memcpy(untouched_copy, untouched, sizeof untouched);
-    assert(sc_evdev_semantic_codes(faceless, SC_EVDEV_KEY_WORDS,
-                                   untouched, SC_PAD_COUNT) == 0);
-    assert(memcmp(untouched, untouched_copy, sizeof untouched) == 0);
+    /* Aparelho classico (dois sticks completos) nao muda de resultado. */
+    unsigned long full[SC_EVDEV_ABS_WORDS];
+    memset(full, 0, sizeof full);
+    set_bit(full, ABS_X);
+    set_bit(full, ABS_Y);
+    set_bit(full, ABS_RX);
+    set_bit(full, ABS_RY);
+    assert(sc_evdev_abs_code_for_sdl_axis(full, SC_EVDEV_ABS_WORDS, 0) ==
+           ABS_X);
+    assert(sc_evdev_abs_code_for_sdl_axis(full, SC_EVDEV_ABS_WORDS, 3) ==
+           ABS_RY);
 
     assert(sc_evdev_test_bit(bits, SC_EVDEV_KEY_WORDS, -1) == 0);
     assert(sc_evdev_test_bit(bits, SC_EVDEV_KEY_WORDS, KEY_MAX + 1) == 0);

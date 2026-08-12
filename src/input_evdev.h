@@ -8,6 +8,8 @@
 #define SC_EVDEV_WORD_BITS (8U * sizeof(unsigned long))
 #define SC_EVDEV_KEY_WORDS \
     ((KEY_MAX + 1U + SC_EVDEV_WORD_BITS - 1U) / SC_EVDEV_WORD_BITS)
+#define SC_EVDEV_ABS_WORDS \
+    ((ABS_MAX + 1U + SC_EVDEV_WORD_BITS - 1U) / SC_EVDEV_WORD_BITS)
 
 enum sc_evdev_face_mapping {
     SC_EVDEV_FACE_UNKNOWN = 0,
@@ -30,16 +32,13 @@ enum {
 int sc_evdev_test_bit(const unsigned long *bits, size_t words, int code);
 int sc_evdev_sdl_button_index(const unsigned long *bits, size_t words,
                               int code);
-int sc_evdev_code_for_sdl_button(const unsigned long *bits, size_t words,
-                                 int button_index);
-void sc_evdev_apply_button_snapshot(const unsigned long *state, size_t words,
-                                    const int *logical_codes, size_t count,
-                                    uint8_t *buttons);
 enum sc_evdev_face_mapping sc_evdev_classify_face_mapping(
     const unsigned long *bits, size_t words,
     int bind_a, int bind_b, int bind_x, int bind_y);
-int sc_evdev_semantic_codes(const unsigned long *bits, size_t words,
-                            int *logical_codes, size_t count);
+int sc_evdev_abs_code_for_sdl_axis(const unsigned long *abs_bits, size_t words,
+                                   int axis_index);
+int sc_evdev_any_key_pressed(const unsigned long *state,
+                             const unsigned long *capabilities, size_t words);
 int sc_evdev_axis_is_analog(int minimum, int maximum);
 int16_t sc_evdev_axis_normalize(int value, int minimum, int maximum);
 
