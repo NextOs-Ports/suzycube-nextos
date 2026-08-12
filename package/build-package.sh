@@ -15,7 +15,7 @@ NXRELEASE_VERSION=0.2.5
 NXRELEASE_SHA256=097ef954261d7e31fb4a759caf2ebda9be02f069b1968e3f7b379d92f51e732f
 MANIFEST="$PORT_DIR/nxrelease.json"
 DESTINATION=${1:-"$PORT_DIR/.build/release"}
-ARCHIVE_NAME=SuzyCube.NextOS-v1.1.8.zip
+ARCHIVE_NAME=SuzyCube.NextOS-v1.1.9.zip
 
 fail() {
   printf 'suzy cube package error: %s\n' "$*" >&2
