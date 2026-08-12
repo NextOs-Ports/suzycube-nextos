@@ -129,6 +129,31 @@ static struct {
     int64_t event_time;
     int64_t down_time[256];
 } key_event;
+
+/* A Unity le o KeyEvent injetado em DOIS tempos: parte durante o
+ * nativeInjectEvent e o resto DEPOIS, da fila de input (medido no Oceanhorn
+ * com contador de leituras).  Com um objeto-sentinela unico cujos getters
+ * respondem pela struct global, a leitura adiada do evento N devolve os
+ * campos do evento N+1 -- um UP injetado perto de outro evento (soltar
+ * diagonal) vira OUTRO evento no caminho e a tecla fica presa.  Cada evento
+ * sai num slot proprio de um anel; os getters respondem pelo snapshot. */
+typedef struct {
+    int action;
+    int keycode;
+    int source;
+    int device_id;
+    int meta_state;
+    int repeat;
+    int scancode;
+    int flags;
+    int unicode;
+    int64_t event_time;
+    int64_t down_time;
+} key_snapshot;
+#define KEY_RING 32
+static key_snapshot key_ring[KEY_RING];
+static jobj *key_ring_object[KEY_RING];
+static int key_ring_index;
 typedef struct {
     int action;
     int source;
@@ -175,6 +200,8 @@ void sc_jni_input_device_info(const char *name, int vendor, int product,
     input_device_product = product;
 }
 
+int sc_jni_key_trace;
+
 void *sc_jni_key_event(int action, int keycode, int scancode)
 {
     int64_t now = monotonic_millis();
@@ -183,6 +210,9 @@ void *sc_jni_key_event(int action, int keycode, int scancode)
         keycode = 0;
     if (action == 0 || key_event.down_time[keycode] == 0)
         key_event.down_time[keycode] = now;
+    if (sc_jni_key_trace)
+        fprintf(stderr, "[sc/jni] KeyEvent PREP key=%d action=%d\n",
+                keycode, action);
     key_event.action = action;
     key_event.keycode = keycode;
     /* Android reports these devices as GAMEPAD | DPAD | JOYSTICK. */
@@ -194,11 +224,24 @@ void *sc_jni_key_event(int action, int keycode, int scancode)
     key_event.flags = 0;
     key_event.unicode = 0;
     key_event.event_time = now;
-    if (action == 1) {
-        /* nativeInjectEvent consumes the object synchronously, so the slot can
-         * be released as soon as this call returns to the input bridge. */
-    }
-    return key_event_object;
+
+    key_snapshot *snap = &key_ring[key_ring_index];
+    jobj *object = key_ring_object[key_ring_index];
+    key_ring_index = (key_ring_index + 1) % KEY_RING;
+    if (!object)
+        return key_event_object;   /* anel ainda nao criado: sentinela */
+    snap->action = key_event.action;
+    snap->keycode = key_event.keycode;
+    snap->source = key_event.source;
+    snap->device_id = key_event.device_id;
+    snap->meta_state = key_event.meta_state;
+    snap->repeat = key_event.repeat;
+    snap->scancode = key_event.scancode;
+    snap->flags = key_event.flags;
+    snap->unicode = key_event.unicode;
+    snap->event_time = key_event.event_time;
+    snap->down_time = key_event.down_time[key_event.keycode];
+    return object;
 }
 
 void *sc_jni_motion_event(float lx, float ly, float rx, float ry,
@@ -981,25 +1024,53 @@ static int64_t j_MotionRange_getFloat(jctx *c)
     return jfloat_result(value);
 }
 
+/* Diagnostico (SC_DPADTRACE=1): quando a Unity LE os campos do KeyEvent.  Se
+ * a leitura nao acontecer dentro da propria injecao, dois eventos na mesma
+ * frame se sobrescrevem na struct global -- e um DOWN sem UP fica preso. */
+static const key_snapshot *key_from_object(jobj *object)
+{
+    static key_snapshot sentinel;
+    if (object && object->data)
+        return (const key_snapshot *)object->data;
+    /* Sentinela legado: espelha a struct global no formato do snapshot. */
+    sentinel.action = key_event.action;
+    sentinel.keycode = key_event.keycode;
+    sentinel.source = key_event.source;
+    sentinel.device_id = key_event.device_id;
+    sentinel.meta_state = key_event.meta_state;
+    sentinel.repeat = key_event.repeat;
+    sentinel.scancode = key_event.scancode;
+    sentinel.flags = key_event.flags;
+    sentinel.unicode = key_event.unicode;
+    sentinel.event_time = key_event.event_time;
+    sentinel.down_time = key_event.down_time[key_event.keycode];
+    return &sentinel;
+}
+
 static int64_t j_KeyEvent_getInt(jctx *c)
 {
-    if (strcmp(c->m->name, "getAction") == 0) return key_event.action;
-    if (strcmp(c->m->name, "getKeyCode") == 0) return key_event.keycode;
-    if (strcmp(c->m->name, "getSource") == 0) return key_event.source;
-    if (strcmp(c->m->name, "getDeviceId") == 0) return key_event.device_id;
-    if (strcmp(c->m->name, "getMetaState") == 0) return key_event.meta_state;
-    if (strcmp(c->m->name, "getRepeatCount") == 0) return key_event.repeat;
-    if (strcmp(c->m->name, "getScanCode") == 0) return key_event.scancode;
-    if (strcmp(c->m->name, "getFlags") == 0) return key_event.flags;
-    if (strcmp(c->m->name, "getUnicodeChar") == 0) return key_event.unicode;
+    const key_snapshot *snap = key_from_object(c->self);
+    if (sc_jni_key_trace && strcmp(c->m->name, "getKeyCode") == 0)
+        fprintf(stderr, "[sc/jni] KeyEvent.getKeyCode -> key=%d action=%d\n",
+                snap->keycode, snap->action);
+    if (strcmp(c->m->name, "getAction") == 0) return snap->action;
+    if (strcmp(c->m->name, "getKeyCode") == 0) return snap->keycode;
+    if (strcmp(c->m->name, "getSource") == 0) return snap->source;
+    if (strcmp(c->m->name, "getDeviceId") == 0) return snap->device_id;
+    if (strcmp(c->m->name, "getMetaState") == 0) return snap->meta_state;
+    if (strcmp(c->m->name, "getRepeatCount") == 0) return snap->repeat;
+    if (strcmp(c->m->name, "getScanCode") == 0) return snap->scancode;
+    if (strcmp(c->m->name, "getFlags") == 0) return snap->flags;
+    if (strcmp(c->m->name, "getUnicodeChar") == 0) return snap->unicode;
     return 0;
 }
 
 static int64_t j_KeyEvent_getLong(jctx *c)
 {
+    const key_snapshot *snap = key_from_object(c->self);
     if (strcmp(c->m->name, "getDownTime") == 0)
-        return key_event.down_time[key_event.keycode];
-    return key_event.event_time;
+        return snap->down_time;
+    return snap->event_time;
 }
 
 static int64_t j_KeyEvent_isSystem(jctx *c)
@@ -3046,6 +3117,10 @@ void sc_jni_init(void)
     }
     motion_range_iterator = mk_object("java/util/Iterator");
     key_event_object = mk_object("android/view/KeyEvent");
+    for (int i = 0; i < KEY_RING; i++) {
+        key_ring_object[i] = mk_object("android/view/KeyEvent");
+        key_ring_object[i]->data = &key_ring[i];
+    }
     motion_event_object = mk_object("android/view/MotionEvent");
     motion_event_object->data = &motion_event;
     fmod_device_object = mk_object("org/fmod/FMODAudioDevice");

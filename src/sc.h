@@ -41,6 +41,7 @@ void *sc_jret_str(const char *text);
 void sc_jni_set_unity_player(void *player);
 void sc_jni_input_device_info(const char *name, int vendor, int product,
                               const char *descriptor);
+extern int sc_jni_key_trace;
 void *sc_jni_key_event(int action, int keycode, int scancode);
 void *sc_jni_motion_event(float lx, float ly, float rx, float ry,
                           float lt, float rt, float hat_x, float hat_y);

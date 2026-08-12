@@ -21,6 +21,7 @@
 #define _GNU_SOURCE
 #include <SDL2/SDL.h>
 #include "framework_bridge.h"
+#include <dlfcn.h>
 #include <fcntl.h>
 #include <linux/input.h>
 #include <math.h>
@@ -277,29 +278,34 @@ static void configure_axes(void)
  * fica presa e o personagem anda sozinho ate' o proximo toque.  EVIOCGABS e'
  * snapshot do kernel e se autocorrige no quadro seguinte, como o EVIOCGKEY
  * dos botoes. */
-static void apply_evdev_hat(void)
+static int read_evdev_hat(int *x, int *y)
 {
     struct input_absinfo info;
+    *x = 0;
+    *y = 0;
+    if (evdev_pad.fd < 0)
+        return 0;
     if (evdev_pad.hat_code[0] >= 0) {
         memset(&info, 0, sizeof info);
-        if (ioctl(evdev_pad.fd, EVIOCGABS(evdev_pad.hat_code[0]),
-                  &info) >= 0) {
-            if (info.value < 0)
-                buttons[SDL_CONTROLLER_BUTTON_DPAD_LEFT] = 1;
-            else if (info.value > 0)
-                buttons[SDL_CONTROLLER_BUTTON_DPAD_RIGHT] = 1;
-        }
+        if (ioctl(evdev_pad.fd, EVIOCGABS(evdev_pad.hat_code[0]), &info) >= 0)
+            *x = info.value;
     }
     if (evdev_pad.hat_code[1] >= 0) {
         memset(&info, 0, sizeof info);
-        if (ioctl(evdev_pad.fd, EVIOCGABS(evdev_pad.hat_code[1]),
-                  &info) >= 0) {
-            if (info.value < 0)
-                buttons[SDL_CONTROLLER_BUTTON_DPAD_UP] = 1;
-            else if (info.value > 0)
-                buttons[SDL_CONTROLLER_BUTTON_DPAD_DOWN] = 1;
-        }
+        if (ioctl(evdev_pad.fd, EVIOCGABS(evdev_pad.hat_code[1]), &info) >= 0)
+            *y = info.value;
     }
+    return 1;
+}
+
+static void apply_evdev_hat(void)
+{
+    int x = 0, y = 0;
+    read_evdev_hat(&x, &y);
+    buttons[SDL_CONTROLLER_BUTTON_DPAD_LEFT] = x < 0;
+    buttons[SDL_CONTROLLER_BUTTON_DPAD_RIGHT] = x > 0;
+    buttons[SDL_CONTROLLER_BUTTON_DPAD_UP] = y < 0;
+    buttons[SDL_CONTROLLER_BUTTON_DPAD_DOWN] = y > 0;
 }
 
 static void configure_evdev_mapping(void)
@@ -349,6 +355,60 @@ static void configure_evdev_mapping(void)
                 evdev_pad.path);
 }
 
+/* O SDL nao entrega o nome cru do evdev: ele apara as pontas e colapsa
+ * espacos internos (o no do pad USB do NextOS chama-se
+ * " USB Gamepad          ", e o SDL diz "USB Gamepad").  Comparar cru fazia
+ * o casamento falhar, o port ficava SEM o no evdev -- logo sem guarda
+ * antitravamento e sem hat do kernel -- e o dpad grudava. */
+static void normalize_pad_name(char *dst, size_t size, const char *src)
+{
+    size_t out = 0;
+    int pending_space = 0;
+    if (!dst || size == 0)
+        return;
+    for (const char *p = src; p && *p && out + 1 < size; p++) {
+        const unsigned char c = (unsigned char)*p;
+        if (c == ' ' || c == '\t') {
+            pending_space = out > 0;
+            continue;
+        }
+        if (pending_space && out + 2 < size) {
+            dst[out++] = ' ';
+            pending_space = 0;
+        }
+        dst[out++] = (char)c;
+    }
+    dst[out] = '\0';
+}
+
+static int pad_name_matches(const char *evdev_name, const char *wanted)
+{
+    char normalized[256];
+    normalize_pad_name(normalized, sizeof normalized, evdev_name);
+    return strcmp(normalized, wanted) == 0;
+}
+
+/* SDL_JoystickPath existe a partir do SDL 2.24; por dlsym o binario segue
+ * carregando em firmware com SDL mais velho. */
+static const char *sdl_joystick_node_path(void)
+{
+    static const char *(*joystick_path)(SDL_Joystick *);
+    static int looked_up;
+    SDL_Joystick *joy = controller ? SDL_GameControllerGetJoystick(controller)
+                                   : raw_joystick;
+    if (!joy)
+        return NULL;
+    if (!looked_up) {
+        joystick_path = (const char *(*)(SDL_Joystick *))
+            dlsym(RTLD_DEFAULT, "SDL_JoystickPath");
+        looked_up = 1;
+    }
+    if (!joystick_path)
+        return NULL;
+    const char *path = joystick_path(joy);
+    return path && strncmp(path, "/dev/input/event", 16) == 0 ? path : NULL;
+}
+
 static int open_evdev_pad(const char *physical, int vendor, int product)
 {
     close_evdev_pad();
@@ -361,9 +421,23 @@ static int open_evdev_pad(const char *physical, int vendor, int product)
     unsigned long matched_capabilities[SC_EVDEV_KEY_WORDS];
     memset(matched_capabilities, 0, sizeof matched_capabilities);
 
-    for (int i = 0; i < 64; i++) {
+    char wanted[256];
+    normalize_pad_name(wanted, sizeof wanted, physical);
+
+    /* Quando o SDL sabe dizer o no exato (2.24+), ele desempata sozinho --
+     * inclusive num adaptador com dois nos identicos.  Vem por dlsym para o
+     * binario continuar rodando com SDL antigo. */
+    const char *exact = sdl_joystick_node_path();
+
+    for (int i = exact ? -1 : 0; i < 64; i++) {
         char path[64];
-        snprintf(path, sizeof path, "/dev/input/event%d", i);
+        const int trusted = i < 0;
+        if (trusted)
+            snprintf(path, sizeof path, "%s", exact);
+        else if (matches == 1 && matched_fd >= 0 && exact)
+            break;   /* o caminho exato do SDL ja' resolveu */
+        else
+            snprintf(path, sizeof path, "/dev/input/event%d", i);
         int fd = open(path, O_RDONLY | O_CLOEXEC | O_NONBLOCK);
         if (fd < 0)
             continue;
@@ -379,10 +453,15 @@ static int open_evdev_pad(const char *physical, int vendor, int product)
             ioctl(fd, EVIOCGNAME(sizeof name - 1), name) >= 0 &&
             ioctl(fd, EVIOCGBIT(EV_KEY, sizeof capabilities),
                   capabilities) >= 0 &&
-            id.vendor == (unsigned int)vendor &&
-            id.product == (unsigned int)product &&
-            strcmp(name, physical) == 0 &&
-            sc_evdev_test_bit(capabilities, SC_EVDEV_KEY_WORDS, BTN_SOUTH);
+            (trusted ||
+             (id.vendor == (unsigned int)vendor &&
+              id.product == (unsigned int)product &&
+              pad_name_matches(name, wanted))) &&
+            /* Pad de gamepad (BTN_SOUTH) ou de joystick classico
+             * (BTN_TRIGGER): o "USB Gamepad" comum do NextOS declara so' o
+             * bloco 0x120, e exigir BTN_SOUTH deixava o port sem no evdev. */
+            (sc_evdev_test_bit(capabilities, SC_EVDEV_KEY_WORDS, BTN_SOUTH) ||
+             sc_evdev_test_bit(capabilities, SC_EVDEV_KEY_WORDS, BTN_TRIGGER));
         if (!usable) {
             close(fd);
             continue;
@@ -402,11 +481,10 @@ static int open_evdev_pad(const char *physical, int vendor, int product)
     if (matches != 1) {
         if (matched_fd >= 0)
             close(matched_fd);
-        if (matches > 1)
-            fprintf(stderr,
-                    "[sc/input] evdev ambiguo para %s (%04x:%04x); "
-                    "mantendo SDL\n",
-                    physical, vendor & 0xffff, product & 0xffff);
+        fprintf(stderr,
+                "[sc/input] SEM no evdev para \"%s\" (%04x:%04x): %d "
+                "candidatos -- sem guarda antitravamento\n",
+                physical, vendor & 0xffff, product & 0xffff, matches);
         return 0;
     }
 
@@ -507,8 +585,13 @@ static void apply_evdev_snapshot(void)
      * TUDO desloca).  O unico veredito que dispensa essa numeracao e' "o
      * kernel nao tem NADA pressionado" -- e e' justamente ele que cura o
      * botao/direcao preso por release perdido. */
+    /* O dpad deste pad e' EIXO (ABS_HAT0), nao tecla: sem consultar o hat, a
+     * guarda declarava "ocioso" com o dpad pressionado e apagava a direcao. */
+    int hat_x = 0, hat_y = 0;
+    read_evdev_hat(&hat_x, &hat_y);
     evdev_pad.idle = !sc_evdev_any_key_pressed(state, evdev_pad.capabilities,
-                                               SC_EVDEV_KEY_WORDS);
+                                               SC_EVDEV_KEY_WORDS) &&
+                     hat_x == 0 && hat_y == 0;
     if (evdev_pad.idle)
         memset(buttons, 0, sizeof buttons);
 
@@ -623,16 +706,6 @@ static void read_buttons(void)
         for (int i = 0; i < SDL_CONTROLLER_BUTTON_MAX; i++)
             buttons[i] = SDL_GameControllerGetButton(controller,
                                                      (SDL_GameControllerButton)i);
-        /* Dpad-como-ABS_HAT: o kernel manda no lugar do hat do SDL, que e'
-         * estado acumulado de eventos e fica preso quando o CFW perde um
-         * release. */
-        if (evdev_pad.hat_code[0] >= 0 || evdev_pad.hat_code[1] >= 0) {
-            buttons[SDL_CONTROLLER_BUTTON_DPAD_UP] = 0;
-            buttons[SDL_CONTROLLER_BUTTON_DPAD_DOWN] = 0;
-            buttons[SDL_CONTROLLER_BUTTON_DPAD_LEFT] = 0;
-            buttons[SDL_CONTROLLER_BUTTON_DPAD_RIGHT] = 0;
-            apply_evdev_hat();
-        }
     } else if (raw_joystick) {
         int n = SDL_JoystickNumButtons(raw_joystick);
         for (int i = 0; i < n && i < (int)(sizeof raw_to_pad /
@@ -642,6 +715,12 @@ static void read_buttons(void)
         apply_joystick_hat(raw_joystick);
     }
     apply_evdev_snapshot();
+    /* Dpad-como-ABS_HAT: o kernel manda no lugar do hat do SDL (estado
+     * acumulado de eventos, que fica preso quando o CFW perde um release).
+     * Vem DEPOIS da guarda, senao ela apagaria a direcao recem-lida. */
+    if (evdev_pad.fd >= 0 &&
+        (evdev_pad.hat_code[0] >= 0 || evdev_pad.hat_code[1] >= 0))
+        apply_evdev_hat();
     apply_trigger_happy_fallback();
 }
 
@@ -958,9 +1037,62 @@ void sc_input_poll(void *env, void *player, unsigned long frame)
         return;
     }
 
+    /* Rastro de diagnostico do dpad (SC_DPADTRACE=1): imprime, a cada
+     * mudanca, o que o kernel diz, o que o SDL diz e o que injetamos --
+     * para o veredito sair de MEDIDA e nao de suposicao. */
+    static int dpad_trace = -1;
+    if (dpad_trace < 0) {
+        const char *v = getenv("SC_DPADTRACE");
+        dpad_trace = v && *v && *v != '0';
+        sc_jni_key_trace = dpad_trace;
+    }
+    if (dpad_trace) {
+        static const int dpad_ids[4] = {
+            SDL_CONTROLLER_BUTTON_DPAD_UP, SDL_CONTROLLER_BUTTON_DPAD_DOWN,
+            SDL_CONTROLLER_BUTTON_DPAD_LEFT, SDL_CONTROLLER_BUTTON_DPAD_RIGHT
+        };
+        int changed = 0;
+        for (int i = 0; i < 4; i++)
+            changed |= buttons[dpad_ids[i]] != previous[dpad_ids[i]];
+        if (changed) {
+            int kx = 0, ky = 0;
+            read_evdev_hat(&kx, &ky);
+            SDL_Joystick *joy = controller
+                              ? SDL_GameControllerGetJoystick(controller)
+                              : raw_joystick;
+            const int sdl_hat = joy && SDL_JoystickNumHats(joy) > 0
+                              ? SDL_JoystickGetHat(joy, 0) : -1;
+            fprintf(stderr,
+                    "[sc/dpad] f=%lu kernel=(%d,%d) sdlhat=0x%02x "
+                    "U%dD%dL%dR%d idle=%d\n",
+                    frame, kx, ky, sdl_hat & 0xff,
+                    buttons[SDL_CONTROLLER_BUTTON_DPAD_UP],
+                    buttons[SDL_CONTROLLER_BUTTON_DPAD_DOWN],
+                    buttons[SDL_CONTROLLER_BUTTON_DPAD_LEFT],
+                    buttons[SDL_CONTROLLER_BUTTON_DPAD_RIGHT],
+                    evdev_pad.idle);
+        }
+    }
+
+    /* O dpad NUNCA viaja por KeyEvent.  KeyEvent e' evento de BORDA: se o
+     * lado Unity/InControl perde ou reordena um UP (diagonais geram varias
+     * transicoes na mesma frame), a direcao fica presa e o personagem anda
+     * sozinho -- medido em campo com a nossa camada ja' solta e o UP lido.
+     * O dpad segue so' pelo MotionEvent AXIS_HAT_X/Y logo abaixo, que e'
+     * NIVEL reenviado todo quadro: cada quadro reafirma o estado absoluto,
+     * entao nao existe "borda perdida".  No Android real o dpad do perfil
+     * Xbox 360 chega exatamente assim. */
     for (int i = 0; i < SDL_CONTROLLER_BUTTON_MAX; i++) {
         if (buttons[i] == previous[i] || android_key[i] == 0)
             continue;
+        if (i >= SDL_CONTROLLER_BUTTON_DPAD_UP &&
+            i <= SDL_CONTROLLER_BUTTON_DPAD_RIGHT) {
+            if (dpad_trace)
+                fprintf(stderr,
+                        "[sc/dpad] %s via HAT (sem KeyEvent) f=%lu\n",
+                        buttons[i] ? "DOWN" : "UP", frame);
+            continue;
+        }
         inject(env, player,
                sc_jni_key_event(buttons[i] ? 0 : 1, android_key[i], 0));
     }
