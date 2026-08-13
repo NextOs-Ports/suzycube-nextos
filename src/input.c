@@ -98,12 +98,12 @@ static uint8_t trigger_prev[2];
  * perdido um evento. So usamos o no evdev quando nome + VID/PID identificam um
  * unico gamepad; em caso de ambiguidade, o caminho SDL original permanece. */
 enum face_policy {
-    FACE_POLICY_FIRMWARE = 0,
-    FACE_POLICY_AUTO,
+    FACE_POLICY_AUTO = 0,
+    FACE_POLICY_FIRMWARE,
     FACE_POLICY_XBOX,
 };
 
-static enum face_policy configured_face_policy = FACE_POLICY_FIRMWARE;
+static enum face_policy configured_face_policy = FACE_POLICY_AUTO;
 
 static struct {
     int fd;
@@ -893,7 +893,7 @@ int sc_input_init(void)
     const char *v = getenv("SC_INPUTLOG");
     input_diag = v && *v && *v != '0';
     const char *face = getenv("SC_FACE_LAYOUT");
-    configured_face_policy = FACE_POLICY_FIRMWARE;
+    configured_face_policy = FACE_POLICY_AUTO;
     if (face && *face) {
         if (strcmp(face, "firmware") == 0)
             configured_face_policy = FACE_POLICY_FIRMWARE;
@@ -903,7 +903,7 @@ int sc_input_init(void)
             configured_face_policy = FACE_POLICY_XBOX;
         else
             fprintf(stderr,
-                    "[sc/input] SC_FACE_LAYOUT=%s invalido; usando firmware\n",
+                    "[sc/input] SC_FACE_LAYOUT=%s invalido; usando auto\n",
                     face);
     }
     input_active = 1;

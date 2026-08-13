@@ -59,18 +59,19 @@ arm64 objects (`libmain.so`, `libunity.so`, `libil2cpp.so`), runs their real
 | Button | Action |
 |---|---|
 | D-pad / left stick | move, navigate menus |
-| A (the letter shown by the game) | jump / confirm |
-| B (the letter shown by the game) | back / cancel |
+| A / Cross (south button) | jump / confirm |
+| B / Circle (right button) | back / cancel |
 | Other face buttons | actions shown by the game |
 | L1 / R1 | switch worlds on the map |
 | START | start / pause |
 | SELECT + START | quit through the native path (pause + save + exit) |
 
-Since v1.1.10, A/B/X/Y follow the firmware's own published meaning by default:
-when the game displays A, press the button printed A on the device. This keeps
-a normal Xbox controller unchanged and makes Nintendo-labelled R36S handhelds
-match the on-screen letters. Set `SC_FACE_LAYOUT=auto` to restore v1.1.9's
-position-based behavior; `SC_FACE_LAYOUT=xbox` forces Xbox positions whenever
+Since v1.1.11, `SC_FACE_LAYOUT=auto` is the default. A normal Xbox controller
+is left unchanged; when SDL plus `evdev` prove a Nintendo-labelled layout, the
+port normalizes it to the positions shown by the game: A/Cross on the south
+button and B/Circle on the right button. This behavior was physically confirmed
+on dArkOSRE with the GO-Super Gamepad. `SC_FACE_LAYOUT=firmware` preserves the
+CFW's published letters, while `SC_FACE_LAYOUT=xbox` forces Xbox positions when
 an unambiguous `evdev` snapshot is available.
 
 Version 1.1.10 keeps `evdev` only to verify that a mapped physical axis is
@@ -131,19 +132,19 @@ e `JNI_OnLoad` de verdade e dirige o ciclo de vida nativo do UnityPlayer.
 | Botão | Ação |
 |---|---|
 | D-pad / analógico esquerdo | mover, navegar nos menus |
-| A (a letra indicada pelo jogo) | pular / confirmar |
-| B (a letra indicada pelo jogo) | voltar / cancelar |
+| A / Cross (botão sul) | pular / confirmar |
+| B / Circle (botão à direita) | voltar / cancelar |
 | Demais botões de face | ações indicadas pelo jogo |
 | L1 / R1 | trocar de mundo no mapa |
 | START | começar / pausar |
 | SELECT + START | sair pelo caminho nativo (pause + save + fim) |
 
-Desde a v1.1.10, A/B/X/Y seguem por padrão o significado publicado pelo próprio
-firmware: quando o jogo mostra A, aperte o A impresso no aparelho. Isso mantém o
-layout normal de um controle Xbox e faz os portáteis R36S com letras Nintendo
-coincidirem com a tela. `SC_FACE_LAYOUT=auto` restaura o comportamento por
-posição da v1.1.9; `SC_FACE_LAYOUT=xbox` força posições Xbox quando existe um
-snapshot `evdev` inequívoco.
+Desde a v1.1.11, `SC_FACE_LAYOUT=auto` é o padrão. Um controle Xbox permanece
+inalterado; quando SDL + `evdev` comprovam letras Nintendo, o port normaliza as
+posições para o padrão mostrado pelo jogo: A/Cross no botão sul e B/Circle no
+botão à direita. Esse comportamento foi confirmado fisicamente no dArkOSRE com
+o GO-Super Gamepad. `SC_FACE_LAYOUT=firmware` preserva as letras publicadas pelo
+CFW e `SC_FACE_LAYOUT=xbox` força posições Xbox quando o snapshot é inequívoco.
 
 Na v1.1.10, o `evdev` apenas confirma que o eixo físico mapeado é realmente
 analógico; o valor vem da saída calibrada e mapeada do SDL. Isso preserva

@@ -61,12 +61,13 @@ peak is transient. From the second launch on, the game starts directly.
 | L1 / R1 | switch world on the map |
 | **SELECT + START** | save and quit back to the frontend |
 
-Since v1.1.10, face buttons follow the firmware's own A/B/X/Y meaning by
-default: when the game displays A, press the button printed A on the device.
-This keeps a normal Xbox controller unchanged and makes Nintendo-labelled R36S
-handhelds match the on-screen letters. To retain v1.1.9's position-based
-behavior, set `SC_FACE_LAYOUT=auto`; `SC_FACE_LAYOUT=xbox` forces Xbox
-positions whenever an unambiguous `evdev` snapshot is available.
+Since v1.1.11, `SC_FACE_LAYOUT=auto` is the default. A normal Xbox controller
+is left unchanged; when SDL plus `evdev` prove a Nintendo-labelled layout, the
+port normalizes it to the positions shown by the game: A/Cross on the south
+button and B/Circle on the right button. This behavior was physically confirmed
+on dArkOSRE with the GO-Super Gamepad. `SC_FACE_LAYOUT=firmware` preserves the
+CFW's published letters, while `SC_FACE_LAYOUT=xbox` forces Xbox positions when
+an unambiguous `evdev` snapshot is available.
 
 Mapped digital buttons are also resampled from the kernel every frame on pads
 that can be matched unambiguously. This prevents a dropped release event from

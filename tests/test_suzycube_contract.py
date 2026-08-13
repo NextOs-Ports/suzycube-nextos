@@ -179,9 +179,9 @@ def check_input_recovery_contract():
     require("SC_FACE_LAYOUT" in source and
             "SC_EVDEV_FACE_NINTENDO_LABELS" in source,
             "capability-based face normalization is missing")
-    require("configured_face_policy = FACE_POLICY_FIRMWARE;" in source and
-            "usando firmware" in source,
-            "face buttons must follow firmware labels by default")
+    require("configured_face_policy = FACE_POLICY_AUTO;" in source and
+            "usando auto" in source,
+            "face buttons must normalize proven Nintendo layouts by default")
     require("ev.cdevice.which == controller_instance" in source and
             "ev.jdevice.which == controller_instance" in source,
             "hotplug must not close the active pad for an unrelated device")
