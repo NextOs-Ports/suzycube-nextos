@@ -56,25 +56,28 @@ peak is transient. From the second launch on, the game starts directly.
 | Input | Action |
 |---|---|
 | D-pad / left stick | move |
-| South face button (Xbox A; printed B on an R36S) | jump / confirm |
+| A (the letter shown by the game) | jump / confirm |
+| B (the letter shown by the game) | back / cancel |
 | L1 / R1 | switch world on the map |
 | **SELECT + START** | save and quit back to the frontend |
 
-The game displays Xbox-style glyphs by position. The port automatically fixes
-the common R36S firmware mapping that follows the printed Nintendo-style
-letters (A/B and X/Y reversed by position). Existing positional mappings are
-left unchanged. You are never asked to capture buttons.
+Since v1.1.10, face buttons follow the firmware's own A/B/X/Y meaning by
+default: when the game displays A, press the button printed A on the device.
+This keeps a normal Xbox controller unchanged and makes Nintendo-labelled R36S
+handhelds match the on-screen letters. To retain v1.1.9's position-based
+behavior, set `SC_FACE_LAYOUT=auto`; `SC_FACE_LAYOUT=xbox` forces Xbox
+positions whenever an unambiguous `evdev` snapshot is available.
 
 Mapped digital buttons are also resampled from the kernel every frame on pads
 that can be matched unambiguously. This prevents a dropped release event from
-leaving a D-pad direction stuck. As a compatibility override,
-`SC_FACE_LAYOUT=firmware` preserves the firmware's face-button mapping.
+leaving a D-pad direction stuck.
 
-Version 1.1.4 also filters both sticks with a radial 0.40/0.30 engage/release
-hysteresis, treats SDL controller triggers as neutral at their standardized
-zero rest value, and sends an explicit neutral motion sample after focus loss
-or controller hotplug. Together these prevent worn-stick drift and digital
-L2/R2 mappings from behaving as if a control remained held.
+Version 1.1.10 keeps the `evdev` probe only to verify that a mapped physical
+axis is genuinely analog, while taking its value from SDL's calibrated mapped
+output. This preserves firmware inversion, half-axis and scaling rules and
+fixes a lower-left diagonal arriving as a half press. The existing radial
+0.40/0.30 hysteresis, trigger handling and neutral focus/hotplug sample remain
+unchanged.
 
 ## Troubleshooting
 

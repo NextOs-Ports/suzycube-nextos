@@ -3,7 +3,7 @@
   "source_root": ".",
   "package": {
     "id": "suzycube",
-    "version": "1.1.9",
+    "version": "1.1.10",
     "profile": "universal-portmaster",
     "launcher": "Suzy Cube.sh",
     "launcher_chain": [
@@ -11,7 +11,7 @@
     ],
     "launcher_contract": {
       "generator": "nxbootstrap",
-      "version": "0.6.5",
+      "version": "0.6.8",
       "config_path": "suzycube/nxport.json",
       "config_sha256": "ecea3173201b2e41cba9a879a874db60862267e3aebf6927c89e9865fd50984e"
     },
@@ -102,7 +102,7 @@
       "target": "Suzy Cube.sh",
       "kind": "launcher",
       "mode": "0755",
-      "sha256": "b9c28006714c47387407a0d5a7810e373209845480c3ffe955daf66ba89f5a76"
+      "sha256": "5a776396255f9c19e0edbb9db5e3d7deb4663829820e9b40d191c2db339d0e7b"
     },
     {
       "source": "nxport.json",
@@ -116,7 +116,7 @@
       "target": "suzycube/suzycube-nextos",
       "kind": "project-linux",
       "mode": "0755",
-      "sha256": "cb05cda62ef5e2a990059fd7cf2b435b693fec5638e826cd8168d9533c50d56c",
+      "sha256": "50a76eeb7c7aec5a4a4657fcfe2271695603cd5f8f5c8610c72f52361505499d",
       "architecture": "aarch64",
       "build_profile": "universal-low-glibc",
       "provenance": "build_universal.sh; pinned offline Debian Buster image sha256:036c7910ea53bc78cc213452afa92fa83d55de1c51ae54f315af58b5a41a45cf; target sysroot used for headers only",
@@ -137,14 +137,14 @@
       "target": "suzycube/README.md",
       "kind": "payload",
       "mode": "0644",
-      "sha256": "32db9d87a2b1f5e78d9d40c55528b584fcbe42e5eb761677af4b7eb2261bdc7d"
+      "sha256": "8ac6862c890fd79fa6fe113ff6d6d8c259e96bb8045090c7bd2c0b7d8702b74c"
     },
     {
       "source": "INSTALLATION.md",
       "target": "suzycube/INSTALLATION.md",
       "kind": "payload",
       "mode": "0644",
-      "sha256": "0c33e47181de51302e3b2b31ed57b9f4403dfcd19c39d298fbdb9e710a296d8b"
+      "sha256": "71470894dc02c61766f259f33373d434ff1daf930eb81f4d703cf6fede9f6fbb"
     },
     {
       "source": "NOTICE.md",
@@ -165,7 +165,7 @@
       "target": "suzycube/version.txt",
       "kind": "payload",
       "mode": "0644",
-      "sha256": "7ac07fd87814a73947308b1c213e9df852eceab6c18e7c3df9d07b892c176b0d"
+      "sha256": "aeccfaffeec636e89d972edfb0faf337cd0ac748c67ef0ad538d10eb97896120"
     },
     {
       "source": "gamedata-template/README.txt",

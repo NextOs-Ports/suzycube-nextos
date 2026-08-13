@@ -45,8 +45,9 @@ arm64 objects (`libmain.so`, `libunity.so`, `libil2cpp.so`), runs their real
 - Video: resolution is read from the device, never hardcoded.
 - Audio: Unity's internal FMOD at 24000 Hz stereo, output through the system SDL.
 - Controls: factory InControl — the physical pad is delivered as a real
-  `InputDevice`; SDL plus an authoritative `evdev` snapshot. No cursor, no
-  synthetic touch. Pads without physical SELECT/START (RK3326 family) map
+  `InputDevice`; SDL provides mapped analog values and `evdev` validates
+  capabilities and snapshots digital buttons. No cursor, no synthetic touch.
+  Pads without physical SELECT/START (RK3326 family) map
   `BTN_TRIGGER_HAPPY1/2` directly.
 - Save: `PlayerPrefs` in `home/shared-preferences.bin`, survives close/reopen.
 - Textures: the game's own ETC1; residual ETC2 is decoded in software when the
@@ -58,22 +59,25 @@ arm64 objects (`libmain.so`, `libunity.so`, `libil2cpp.so`), runs their real
 | Button | Action |
 |---|---|
 | D-pad / left stick | move, navigate menus |
-| South face button | jump / confirm |
+| A (the letter shown by the game) | jump / confirm |
+| B (the letter shown by the game) | back / cancel |
+| Other face buttons | actions shown by the game |
 | L1 / R1 | switch worlds on the map |
 | START | start / pause |
 | SELECT + START | quit through the native path (pause + save + exit) |
 
-Suzy Cube uses Xbox glyphs by position. Some R36S firmwares map buttons by the
-printed Nintendo letters, swapping A/B and X/Y relative to those glyphs. The
-port compares the SDL mapping against the kernel's semantic positions and only
-normalizes the two pairs when that inversion is proven; positional mappings
-are left untouched.
+Since v1.1.10, A/B/X/Y follow the firmware's own published meaning by default:
+when the game displays A, press the button printed A on the device. This keeps
+a normal Xbox controller unchanged and makes Nintendo-labelled R36S handhelds
+match the on-screen letters. Set `SC_FACE_LAYOUT=auto` to restore v1.1.9's
+position-based behavior; `SC_FACE_LAYOUT=xbox` forces Xbox positions whenever
+an unambiguous `evdev` snapshot is available.
 
-Since v1.1.4, both sticks use radial 0.40/0.30 engage/release hysteresis,
-L2/R2 respect SDL's standardized zero rest value (including digital-button
-trigger mappings), and focus/hotplug boundaries explicitly send neutral motion
-to Unity. This prevents worn-stick drift and controls that appear to stay held
-on ROCKNIX/muOS.
+Version 1.1.10 keeps `evdev` only to verify that a mapped physical axis is
+genuinely analog, while taking its value from SDL's calibrated mapped output.
+This preserves firmware inversion, half-axis and scaling rules and fixes a
+lower-left diagonal arriving as a half press. The existing radial 0.40/0.30
+hysteresis, trigger handling and neutral focus/hotplug sample remain unchanged.
 
 ### Installation
 
@@ -112,8 +116,9 @@ e `JNI_OnLoad` de verdade e dirige o ciclo de vida nativo do UnityPlayer.
 
 - Vídeo: resolução lida do aparelho, nunca cravada.
 - Áudio: FMOD interno da Unity a 24000 Hz estéreo, saída pelo SDL do sistema.
-- Controle: InControl de fábrica — pad físico como `InputDevice` real; SDL +
-  snapshot `evdev` autoritativo. Sem cursor, sem toque sintético. Pads sem
+- Controle: InControl de fábrica — pad físico como `InputDevice` real; SDL
+  fornece os valores analógicos mapeados e o `evdev` valida capacidades e faz
+  snapshots dos botões digitais. Sem cursor, sem toque sintético. Pads sem
   SELECT/START físicos (família RK3326) usam `BTN_TRIGGER_HAPPY1/2`.
 - Save: `PlayerPrefs` em `home/shared-preferences.bin`, sobrevive a fechar e
   reabrir.
@@ -126,16 +131,25 @@ e `JNI_OnLoad` de verdade e dirige o ciclo de vida nativo do UnityPlayer.
 | Botão | Ação |
 |---|---|
 | D-pad / analógico esquerdo | mover, navegar nos menus |
-| Botão sul | pular / confirmar |
+| A (a letra indicada pelo jogo) | pular / confirmar |
+| B (a letra indicada pelo jogo) | voltar / cancelar |
+| Demais botões de face | ações indicadas pelo jogo |
 | L1 / R1 | trocar de mundo no mapa |
 | START | começar / pausar |
 | SELECT + START | sair pelo caminho nativo (pause + save + fim) |
 
-Desde a v1.1.4, os dois analógicos usam deadzone radial com histerese
-0,40/0,30, L2/R2 respeitam o repouso zero padronizado pelo SDL (inclusive em
-mapeamentos de gatilhos por botões digitais), e foco/hotplug sempre enviam
-movimento neutro ao Unity. Isso elimina drift de sticks gastos e controles que
-pareciam continuar pressionados no ROCKNIX/muOS.
+Desde a v1.1.10, A/B/X/Y seguem por padrão o significado publicado pelo próprio
+firmware: quando o jogo mostra A, aperte o A impresso no aparelho. Isso mantém o
+layout normal de um controle Xbox e faz os portáteis R36S com letras Nintendo
+coincidirem com a tela. `SC_FACE_LAYOUT=auto` restaura o comportamento por
+posição da v1.1.9; `SC_FACE_LAYOUT=xbox` força posições Xbox quando existe um
+snapshot `evdev` inequívoco.
+
+Na v1.1.10, o `evdev` apenas confirma que o eixo físico mapeado é realmente
+analógico; o valor vem da saída calibrada e mapeada do SDL. Isso preserva
+inversão, meia-faixa e escala definidas pelo firmware e corrige a diagonal
+inferior-esquerda que chegava como meia pressão. A deadzone radial 0,40/0,30,
+os gatilhos e a neutralização em foco/hotplug permanecem inalterados.
 
 ### Instalação
 

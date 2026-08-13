@@ -98,12 +98,12 @@ static uint8_t trigger_prev[2];
  * perdido um evento. So usamos o no evdev quando nome + VID/PID identificam um
  * unico gamepad; em caso de ambiguidade, o caminho SDL original permanece. */
 enum face_policy {
-    FACE_POLICY_AUTO = 0,
-    FACE_POLICY_FIRMWARE,
+    FACE_POLICY_FIRMWARE = 0,
+    FACE_POLICY_AUTO,
     FACE_POLICY_XBOX,
 };
 
-static enum face_policy configured_face_policy = FACE_POLICY_AUTO;
+static enum face_policy configured_face_policy = FACE_POLICY_FIRMWARE;
 
 static struct {
     int fd;
@@ -115,10 +115,10 @@ static struct {
      * gatilho preso. */
     int idle;
     /* Eixo do jogo -> codigo ABS do proprio evdev, resolvido pelo bind do
-     * mapping; -1 = eixo sem fonte analogica de verdade (fica neutro). */
+     * mapping; -1 = eixo sem fonte analogica de verdade (fica neutro). O
+     * valor continua vindo do SDL para preservar inversao, meia-faixa e
+     * calibracao declaradas pelo mapping do firmware. */
     int axis_code[SDL_CONTROLLER_AXIS_MAX];
-    int axis_min[SDL_CONTROLLER_AXIS_MAX];
-    int axis_max[SDL_CONTROLLER_AXIS_MAX];
     /* Dpad declarado como ABS_HAT0X/Y e usado como hat pelo mapping. */
     int hat_code[2];
 } evdev_pad = { .fd = -1, .hat_code = { -1, -1 } };
@@ -170,11 +170,8 @@ static void close_evdev_pad(void)
     evdev_pad.face_positional = 0;
     evdev_pad.trigger_happy_direct = 0;
     evdev_pad.idle = 0;
-    for (int i = 0; i < SDL_CONTROLLER_AXIS_MAX; i++) {
+    for (int i = 0; i < SDL_CONTROLLER_AXIS_MAX; i++)
         evdev_pad.axis_code[i] = -1;
-        evdev_pad.axis_min[i] = 0;
-        evdev_pad.axis_max[i] = 0;
-    }
     evdev_pad.hat_code[0] = evdev_pad.hat_code[1] = -1;
 }
 
@@ -201,11 +198,13 @@ static int has_positional_face_codes(const unsigned long *capabilities)
 }
 
 /* O mapping do firmware diz QUAL eixo do pad e' o stick esquerdo (leftx:a0);
- * o evdev diz o que aquele eixo e' de verdade.  Cruzar os dois e' o unico
- * jeito portavel: em aparelho sem ABS_X/Y (RG40XX-H, cujo stick esquerdo e'
- * ABS_RX/RY) o bind acerta, e em aparelho sem stick nenhum o absinfo
- * degenerado (span < 16, dpad-como-ABS) deixa o eixo neutro em vez de
- * normalizar fora do centro -- que era o "personagem anda sozinho". */
+ * o evdev confirma se aquele eixo existe e se e' analogico de verdade. Cruzar
+ * os dois preserva o RG40XX-H (stick esquerdo em ABS_RX/RY) e deixa neutro um
+ * aparelho sem stick. O VALOR, porem, precisa vir de
+ * SDL_GameControllerGetAxis: so' o SDL aplica a inversao, meia-faixa e escala
+ * descritas pelo mapping. Relendo e normalizando o ABS cru, como ate' a
+ * v1.1.9, uma extremidade podia chegar pela metade e perder velocidade numa
+ * diagonal especifica. */
 static void configure_axes(void)
 {
     unsigned long abs_bits[SC_EVDEV_ABS_WORDS];
@@ -243,11 +242,8 @@ static void configure_axes(void)
             !(is_stick && sticks_declared == 0) &&
             ioctl(evdev_pad.fd, EVIOCGABS(code), &info) >= 0 &&
             sc_evdev_axis_is_analog(info.minimum, info.maximum);
-        if (usable) {
+        if (usable)
             evdev_pad.axis_code[i] = code;
-            evdev_pad.axis_min[i] = info.minimum;
-            evdev_pad.axis_max[i] = info.maximum;
-        }
         if (used < sizeof summary)
             used += (size_t)snprintf(
                 summary + used, sizeof summary - used,
@@ -630,19 +626,6 @@ static void request_neutral_motion(void)
     reset_motion_filters();
 }
 
-/* Eixo pelo snapshot do kernel, normalizado pela faixa medida do proprio
- * aparelho: nao acumula evento perdido e nao herda a escala nominal do SDL,
- * que em stick barato deixa o repouso longe do centro. */
-static Sint16 evdev_axis_value(SDL_GameControllerAxis axis)
-{
-    struct input_absinfo info;
-    memset(&info, 0, sizeof info);
-    if (ioctl(evdev_pad.fd, EVIOCGABS(evdev_pad.axis_code[axis]), &info) < 0)
-        return 0;
-    return sc_evdev_axis_normalize(info.value, evdev_pad.axis_min[axis],
-                                   evdev_pad.axis_max[axis]);
-}
-
 static Sint16 axis_raw(SDL_GameControllerAxis axis)
 {
     if (!input_active)
@@ -653,12 +636,14 @@ static Sint16 axis_raw(SDL_GameControllerAxis axis)
         SDL_GameControllerButtonBind bind =
             SDL_GameControllerGetBindForAxis(controller, axis);
         if (bind.bindType == SDL_CONTROLLER_BINDTYPE_AXIS &&
-            evdev_pad.fd >= 0)
+            evdev_pad.fd >= 0 && evdev_pad.axis_code[axis] < 0)
             /* O evdev ja disse se esse eixo e' analogico de verdade: quando
              * nao e' (dpad-como-ABS, aparelho sem stick), fica neutro em vez
              * de virar drift. */
-            return evdev_pad.axis_code[axis] >= 0 ? evdev_axis_value(axis) : 0;
+            return 0;
         if (bind.bindType != SDL_CONTROLLER_BINDTYPE_NONE)
+            /* Autoridade de valor do mapping: preserva ~aN, +aN/-aN,
+             * calibracao e escala especificas do firmware. */
             value = SDL_GameControllerGetAxis(controller, axis);
     } else if (raw_joystick) {
         static const int raw_axis[SDL_CONTROLLER_AXIS_MAX] = {
@@ -908,15 +893,17 @@ int sc_input_init(void)
     const char *v = getenv("SC_INPUTLOG");
     input_diag = v && *v && *v != '0';
     const char *face = getenv("SC_FACE_LAYOUT");
-    configured_face_policy = FACE_POLICY_AUTO;
-    if (face && *face && strcmp(face, "auto") != 0) {
+    configured_face_policy = FACE_POLICY_FIRMWARE;
+    if (face && *face) {
         if (strcmp(face, "firmware") == 0)
             configured_face_policy = FACE_POLICY_FIRMWARE;
+        else if (strcmp(face, "auto") == 0)
+            configured_face_policy = FACE_POLICY_AUTO;
         else if (strcmp(face, "xbox") == 0)
             configured_face_policy = FACE_POLICY_XBOX;
         else
             fprintf(stderr,
-                    "[sc/input] SC_FACE_LAYOUT=%s invalido; usando auto\n",
+                    "[sc/input] SC_FACE_LAYOUT=%s invalido; usando firmware\n",
                     face);
     }
     input_active = 1;
@@ -1140,10 +1127,12 @@ void sc_input_poll(void *env, void *player, unsigned long frame)
 
     /* O dpad tambem viaja como HAT no MotionEvent: e' assim que o perfil
      * Android do InControl le direcao, alem dos KEYCODE_DPAD_*. */
-    float hat_x = (buttons[SDL_CONTROLLER_BUTTON_DPAD_RIGHT] ? 1.0f : 0.0f) -
-                  (buttons[SDL_CONTROLLER_BUTTON_DPAD_LEFT] ? 1.0f : 0.0f);
-    float hat_y = (buttons[SDL_CONTROLLER_BUTTON_DPAD_DOWN] ? 1.0f : 0.0f) -
-                  (buttons[SDL_CONTROLLER_BUTTON_DPAD_UP] ? 1.0f : 0.0f);
+    float hat_x, hat_y;
+    sc_input_dpad_axes(buttons[SDL_CONTROLLER_BUTTON_DPAD_UP],
+                       buttons[SDL_CONTROLLER_BUTTON_DPAD_DOWN],
+                       buttons[SDL_CONTROLLER_BUTTON_DPAD_LEFT],
+                       buttons[SDL_CONTROLLER_BUTTON_DPAD_RIGHT],
+                       &hat_x, &hat_y);
 
     const int current_non_neutral =
         lx != 0.0f || ly != 0.0f || rx != 0.0f || ry != 0.0f ||

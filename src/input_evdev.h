@@ -40,6 +40,5 @@ int sc_evdev_abs_code_for_sdl_axis(const unsigned long *abs_bits, size_t words,
 int sc_evdev_any_key_pressed(const unsigned long *state,
                              const unsigned long *capabilities, size_t words);
 int sc_evdev_axis_is_analog(int minimum, int maximum);
-int16_t sc_evdev_axis_normalize(int value, int minimum, int maximum);
 
 #endif
