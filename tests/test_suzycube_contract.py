@@ -171,9 +171,17 @@ def check_input_recovery_contract():
     require("sc_evdev_abs_code_for_sdl_axis" in source and
             "SDL_CONTROLLER_BINDTYPE_AXIS" in source,
             "stick axes must be resolved through the firmware mapping bind")
+    require("value = SDL_GameControllerGetAxis(controller, axis);" in source,
+            "mapped stick values must come from SDL's calibrated output")
+    require("sc_evdev_axis_normalize" not in source and
+            "evdev_axis_value" not in source,
+            "mapped stick values must not bypass SDL through raw evdev")
     require("SC_FACE_LAYOUT" in source and
             "SC_EVDEV_FACE_NINTENDO_LABELS" in source,
             "capability-based face normalization is missing")
+    require("configured_face_policy = FACE_POLICY_AUTO;" in source and
+            "usando auto" in source,
+            "face buttons must normalize proven Nintendo layouts by default")
     require("ev.cdevice.which == controller_instance" in source and
             "ev.jdevice.which == controller_instance" in source,
             "hotplug must not close the active pad for an unrelated device")
@@ -189,6 +197,8 @@ def check_input_recovery_contract():
             "request_neutral_motion();" in source and
             "motion_non_neutral || motion_neutral_pending" in source,
             "focus/hotplug must flush a neutral MotionEvent")
+    require("sc_input_dpad_axes" in source,
+            "the unit-tested full-level D-pad path is disconnected")
 
 
 def main():

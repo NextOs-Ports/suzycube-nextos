@@ -94,19 +94,6 @@ int sc_evdev_axis_is_analog(int minimum, int maximum)
            (long long)maximum - (long long)minimum >= 16;
 }
 
-int16_t sc_evdev_axis_normalize(int value, int minimum, int maximum)
-{
-    if (maximum <= minimum)
-        return 0;
-    long long v = value;
-    if (v < minimum)
-        v = minimum;
-    if (v > maximum)
-        v = maximum;
-    const long long span = (long long)maximum - (long long)minimum;
-    return (int16_t)(((v - minimum) * 65534LL) / span - 32767LL);
-}
-
 enum sc_evdev_face_mapping sc_evdev_classify_face_mapping(
     const unsigned long *bits, size_t words,
     int bind_a, int bind_b, int bind_x, int bind_y)

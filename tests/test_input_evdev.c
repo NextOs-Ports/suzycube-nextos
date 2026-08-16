@@ -114,18 +114,6 @@ int main(void)
     assert(sc_evdev_axis_is_analog(0, 0) == 0);
     assert(sc_evdev_axis_is_analog(10, 0) == 0);   /* range invertido */
 
-    /* Normalizacao pelo min/max reais: extremos, centro e clamp. */
-    assert(sc_evdev_axis_normalize(0, 0, 255) == -32767);
-    assert(sc_evdev_axis_normalize(255, 0, 255) == 32767);
-    int center = sc_evdev_axis_normalize(128, 0, 255);
-    assert(center > -300 && center < 300);
-    assert(sc_evdev_axis_normalize(0, -32768, 32767) == 0);
-    assert(sc_evdev_axis_normalize(-32768, -32768, 32767) == -32767);
-    assert(sc_evdev_axis_normalize(32767, -32768, 32767) == 32767);
-    assert(sc_evdev_axis_normalize(-999, 0, 255) == -32767);   /* clamp */
-    assert(sc_evdev_axis_normalize(999, 0, 255) == 32767);     /* clamp */
-    assert(sc_evdev_axis_normalize(5, 7, 7) == 0);  /* range vazio: neutro */
-
     puts("SUZY CUBE EVDEV UNIT: PASS");
     return 0;
 }
