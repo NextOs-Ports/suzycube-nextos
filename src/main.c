@@ -25,6 +25,7 @@
 #include "nx_elf.h"
 #include "sc.h"
 #include "framework_bridge.h"
+#include "nxgl_frame_proof_adapter.h"
 
 char sc_gamedir[1024];
 char sc_datadir[1024];
@@ -457,6 +458,10 @@ static void claim_single_instance(void)
 
 int main(int argc, char **argv)
 {
+
+    /* Emitted before anything can fail: a run that dies during startup is
+     * exactly the run whose launch context a reader needs. */
+    nxgl_frame_proof_launch_receipt();
     setvbuf(stderr, NULL, _IOLBF, 0);
     claim_single_instance();
 

@@ -54,7 +54,7 @@
     {
       "kind": "launcher",
       "mode": "0755",
-      "sha256": "1e69a40e6cbfad6476e53a1adc0ff96f6ff16aa0e808e0b21647e3962b6e2515",
+      "sha256": "d78af8a4b7f1912d6de1c1429a9c22c928d5dbe23ed693edb9b5d6df609f117d",
       "source": "Suzy Cube.sh",
       "target": "Suzy Cube.sh"
     },
@@ -95,7 +95,7 @@
         "libz.so.1"
       ],
       "provenance": "build_universal.sh; offline Debian Buster image sha256:036c7910ea53bc78cc213452afa92fa83d55de1c51ae54f315af58b5a41a45cf; framework pin sha256:5c786a8ad3c35fb716dd1e6e0b264b94ca32f1568759592d2251abcc8a4a51b9; target sysroot used for headers only",
-      "sha256": "d77e37da3023015e481d65c89d711c1125491edad8d7d497f3cbef3ed46b9524",
+      "sha256": "916c4bbe0b97c726732adfcb12a58f0d52575d50c908b74c2f08c71cfca71e4a",
       "soname": null,
       "source": "build/suzycube-nextos",
       "target": "suzycube/suzycube-nextos"
@@ -260,7 +260,7 @@
       "config_path": "suzycube/nxport.json",
       "config_sha256": "3575064b140be69b4b40ee5b585c83d4b419bf3391e9bd2f0fd2eb7285f1d070",
       "generator": "nxbootstrap",
-      "version": "0.6.15"
+      "version": "0.6.16"
     },
     "license": {
       "file": "suzycube/LICENSE",

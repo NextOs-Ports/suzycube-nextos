@@ -14,6 +14,32 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / "nxrelease.json"
+
+
+def framework_component_version(component: str) -> str:
+    """Read a component version from the framework tree, never from a literal.
+
+    The manifest already derives every hash from the file it pins; the
+    launcher-contract version was the one value still typed by hand, and it
+    went stale the first time nxbootstrap was bumped.
+    """
+    for env in ("SC_FRAMEWORK_REPOSITORY",):
+        base = os.environ.get(env)
+        if base:
+            candidate = Path(base) / "framework" / component / "VERSION"
+            if candidate.is_file():
+                return candidate.read_text(encoding="utf-8").strip()
+    for env in ("NX_FRAMEWORK_ROOT", "NEXTOS_FRAMEWORK_ROOT"):
+        base = os.environ.get(env)
+        if base:
+            candidate = Path(base) / component / "VERSION"
+            if candidate.is_file():
+                return candidate.read_text(encoding="utf-8").strip()
+    candidate = ROOT.parent / "nextos_ports_android" / "framework" / component / "VERSION"
+    if candidate.is_file():
+        return candidate.read_text(encoding="utf-8").strip()
+    fail(f"cannot resolve the {component} VERSION from the framework tree")
+    raise SystemExit(1)
 SOURCE_DATE_EPOCH = 1786752000
 BUILDER_IMAGE = (
     "sha256:036c7910ea53bc78cc213452afa92fa83d55de1c51ae54f315af58b5a41a45cf"
@@ -172,7 +198,7 @@ def render():
             "launcher_chain": ["Suzy Cube.sh"],
             "launcher_contract": {
                 "generator": "nxbootstrap",
-                "version": "0.6.15",
+                "version": framework_component_version("nxbootstrap"),
                 "config_path": "suzycube/nxport.json",
                 "config_sha256": digest("nxport.json"),
             },

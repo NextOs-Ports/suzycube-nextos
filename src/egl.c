@@ -34,6 +34,7 @@
 #include "egl_sdl.h"
 #include "etc2_decode.h"
 #include "framework_bridge.h"
+#include "nxgl_frame_proof_adapter.h"
 
 /* Attribute names that only exist for ES3 contexts. */
 #define EGL_CONTEXT_MINOR_VERSION_KHR      0x30FB
@@ -1509,8 +1510,33 @@ static void capture_raw_frame_if_requested(void)
     free(rgba);
 }
 
+/* Both presentation paths funnel through my_eglSwapBuffers, so one hook covers
+ * the SDL-owned backend and the raw Mali one. */
+static void frame_proof_tick(void)
+{
+    static unsigned long frame;
+    /* The real gl* entry points live only in this port's shim, so hand the
+     * adapter that resolver instead of letting it fall back to dlsym. */
+    static int resolver_installed;
+    if (!resolver_installed) {
+        resolver_installed = 1;
+        nxgl_frame_proof_set_resolver(sc_gl_sym);
+    }
+    frame++;
+    if (frame == 300 || frame == 600 || frame == 900) {
+        nxgl_frame_proof_sample(0, 0);
+        nxgl_frame_proof_publish();
+    }
+    /* Published at the last sample as well as at shutdown: an automated run
+     * ends with SIGKILL, and a verdict that only appears on a clean exit is
+     * missing from exactly the runs that need it. */
+    if (frame == 900)
+        nxgl_frame_proof_publish();
+}
+
 static EGLBoolean my_eglSwapBuffers(EGLDisplay display, EGLSurface surface)
 {
+    frame_proof_tick();
     if (sc_sdl_video_active())
         return sc_sdl_swap_buffers(display, surface);
     capture_raw_frame_if_requested();
