@@ -103,14 +103,14 @@
     {
       "kind": "payload",
       "mode": "0644",
-      "sha256": "8be5a11a68b69308de52f34fe706c1e7b5c421ba45c2974b23678af954de749b",
+      "sha256": "2a839e83d2161ae7b8d3b11f9c045f97440f58474f3a095891de8895ebea0cd2",
       "source": "README.md",
       "target": "suzycube/README.md"
     },
     {
       "kind": "payload",
       "mode": "0644",
-      "sha256": "8e40168f82dab090a5cc1563e3201c30bfc54050dd4186061cbf540fba5feacf",
+      "sha256": "1ead5ab5a4afa0f65078ff8bf67378e0d4c5af39d9136c86a6ccf5404a13147a",
       "source": "INSTALLATION.md",
       "target": "suzycube/INSTALLATION.md"
     },
