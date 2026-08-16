@@ -13,6 +13,7 @@
 
 #define _GNU_SOURCE
 #include <stdio.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <stdarg.h>
 #include <string.h>
@@ -534,6 +535,18 @@ static void *my_memalign(size_t a, size_t n)
 
 static size_t my_malloc_usable_size(void *p) { return p ? malloc_usable_size(p) : 0; }
 
+/* reallocarray only became a glibc wrapper in 2.26.  Keep the Android import
+ * available without raising the public libc floor or trusting multiplication
+ * that can wrap before realloc sees it. */
+static void *my_reallocarray(void *pointer, size_t count, size_t size)
+{
+    if (size != 0 && count > SIZE_MAX / size) {
+        errno = ENOMEM;
+        return NULL;
+    }
+    return realloc(pointer, count * size);
+}
+
 /* strlcpy only entered glibc in 2.38, while ArkOS/R36S ships glibc 2.30.
  * Android exposes it on every supported API level, so keep the bionic-facing
  * implementation inside the loader instead of inheriting the host libc
@@ -612,7 +625,7 @@ static nx_import tab[] = {
     /* memory */
     E(malloc), E(free), E(calloc), E(realloc), E(posix_memalign),
     A("memalign", my_memalign), A("malloc_usable_size", my_malloc_usable_size),
-    E(aligned_alloc), E(valloc), E(reallocarray),
+    E(aligned_alloc), E(valloc), A("reallocarray", my_reallocarray),
 
     /* strings */
     E(memcpy), E(memmove), E(memset), E(memcmp), E(memchr), E(memrchr),

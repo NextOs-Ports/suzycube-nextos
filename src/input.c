@@ -405,6 +405,26 @@ static const char *sdl_joystick_node_path(void)
     return path && strncmp(path, "/dev/input/event", 16) == 0 ? path : NULL;
 }
 
+/* Vendor/product accessors arrived in SDL 2.0.6.  Resolve them lazily so the
+ * public ELF retains its SDL 2.0.4 floor while newer providers still supply
+ * the stronger evdev identity used by the anti-stuck input path. */
+static void sdl_joystick_identity(SDL_Joystick *joystick,
+                                  int *vendor, int *product)
+{
+    static Uint16 (*get_vendor)(SDL_Joystick *);
+    static Uint16 (*get_product)(SDL_Joystick *);
+    static int looked_up;
+    if (!looked_up) {
+        get_vendor = (Uint16 (*)(SDL_Joystick *))
+            dlsym(RTLD_DEFAULT, "SDL_JoystickGetVendor");
+        get_product = (Uint16 (*)(SDL_Joystick *))
+            dlsym(RTLD_DEFAULT, "SDL_JoystickGetProduct");
+        looked_up = 1;
+    }
+    *vendor = joystick && get_vendor ? (int)get_vendor(joystick) : 0;
+    *product = joystick && get_product ? (int)get_product(joystick) : 0;
+}
+
 static int open_evdev_pad(const char *physical, int vendor, int product)
 {
     close_evdev_pad();
@@ -734,8 +754,9 @@ static void open_controller(void)
         SDL_Joystick *joy = SDL_GameControllerGetJoystick(controller);
         const char *physical = joy ? SDL_JoystickName(joy)
                                    : SDL_GameControllerName(controller);
-        int vendor = joy ? SDL_JoystickGetVendor(joy) : 0;
-        int product = joy ? SDL_JoystickGetProduct(joy) : 0;
+        int vendor = 0;
+        int product = 0;
+        sdl_joystick_identity(joy, &vendor, &product);
         controller_instance = joy ? SDL_JoystickInstanceID(joy) : -1;
         announce(physical, vendor, product);
         fprintf(stderr, "[sc/input] pad: %s (%04x:%04x)\n",
@@ -754,8 +775,9 @@ static void open_controller(void)
         raw_joystick = SDL_JoystickOpen(0);
         if (raw_joystick) {
             const char *name = SDL_JoystickName(raw_joystick);
-            const int vendor = SDL_JoystickGetVendor(raw_joystick);
-            const int product = SDL_JoystickGetProduct(raw_joystick);
+            int vendor = 0;
+            int product = 0;
+            sdl_joystick_identity(raw_joystick, &vendor, &product);
             controller_instance = SDL_JoystickInstanceID(raw_joystick);
             announce(name, vendor, product);
             fprintf(stderr,

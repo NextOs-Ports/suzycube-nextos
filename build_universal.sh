@@ -8,6 +8,7 @@ PORT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 OUTPUT=build/suzycube-nextos
 BUILDER_IMAGE=playfetch-builder:buster
 BUILDER_IMAGE_ID=sha256:036c7910ea53bc78cc213452afa92fa83d55de1c51ae54f315af58b5a41a45cf
+FRAMEWORK_PIN="$PORT_DIR/FRAMEWORK-BUILD-PIN.json"
 export LC_ALL=C
 export TZ=UTC
 export SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH:-1786233600}
@@ -18,8 +19,19 @@ if [[ -n ${SC_UNIVERSAL_OUTPUT:-} && $SC_UNIVERSAL_OUTPUT != "$OUTPUT" ]]; then
 fi
 
 if [ "${SC_BUSTER_IN_CONTAINER:-0}" != "1" ]; then
-  REPOSITORY_ROOT=$(git -C "$PORT_DIR" rev-parse --show-toplevel)
-  NEXTOS_ROOT=${NEXTOS_ROOT:-/mnt/ARQUIVOS/NextOS-Elite-Edition}
+  # shellcheck source=tools/framework-source.sh
+  source "$PORT_DIR/tools/framework-source.sh"
+  FRAMEWORK_REPOSITORY=$(sc_resolve_framework_repository "$PORT_DIR")
+  FRAMEWORK_PIN_HELPER="$FRAMEWORK_REPOSITORY/framework/nxgenerator/framework_pin.py"
+  [ -f "$FRAMEWORK_PIN" ] || {
+    echo "immutable framework build pin is missing: $FRAMEWORK_PIN" >&2
+    exit 1
+  }
+  NEXTOS_ROOT=${NEXTOS_ROOT:-"$HOME/NextOS-Elite-Edition"}
+  [ -d "$NEXTOS_ROOT" ] || {
+    echo "NEXTOS_ROOT must identify the read-only NextOS toolchain archive: $NEXTOS_ROOT" >&2
+    exit 1
+  }
   NEXTOS_TOOLCHAIN=$(
     find -H "$NEXTOS_ROOT" -maxdepth 2 -type d \
       -path '*/build.NextOS-Retro-Elite-Edition-Amlogic-old.aarch64-*/toolchain' \
@@ -47,16 +59,39 @@ if [ "${SC_BUSTER_IN_CONTAINER:-0}" != "1" ]; then
     echo "builder image changed: $ACTUAL_IMAGE_ID" >&2
     exit 1
   }
-  exec docker run --rm --network none \
+
+  FRAMEWORK_WORK=$(mktemp -d "${TMPDIR:-/tmp}/suzycube-framework.XXXXXX")
+  FRAMEWORK_SNAPSHOT="$FRAMEWORK_WORK/source"
+  cleanup_framework() {
+    case $FRAMEWORK_WORK in
+      "${TMPDIR:-/tmp}"/suzycube-framework.*)
+        [[ -d $FRAMEWORK_WORK ]] && rm -rf -- "$FRAMEWORK_WORK"
+        ;;
+      *)
+        echo "refusing unsafe framework cleanup target: $FRAMEWORK_WORK" >&2
+        ;;
+    esac
+  }
+  trap cleanup_framework EXIT INT TERM
+  python3 -B "$FRAMEWORK_PIN_HELPER" materialize \
+    --repository "$FRAMEWORK_REPOSITORY" \
+    --pin "$FRAMEWORK_PIN" \
+    --destination "$FRAMEWORK_SNAPSHOT"
+  python3 -B "$FRAMEWORK_PIN_HELPER" verify \
+    --pin "$FRAMEWORK_PIN" \
+    --snapshot "$FRAMEWORK_SNAPSHOT"
+
+  docker run --rm --network none \
     -e SC_BUSTER_IN_CONTAINER=1 \
     -e SC_UNIVERSAL_OUTPUT="$OUTPUT" \
     -e SC_WERROR="${SC_WERROR:-1}" \
     -e SC_HOST_UID="$(id -u)" -e SC_HOST_GID="$(id -g)" \
     -e LC_ALL=C -e TZ=UTC -e SOURCE_DATE_EPOCH="$SOURCE_DATE_EPOCH" \
     -v "$PORT_DIR":/repo \
-    -v "$REPOSITORY_ROOT/framework":/framework:ro \
+    -v "$FRAMEWORK_SNAPSHOT/framework":/framework:ro \
     -v "$NEXTOS_SYSROOT":/nxsr:ro \
     "$BUILDER_IMAGE_ID" bash /repo/build_universal.sh
+  exit $?
 fi
 
 for tool in aarch64-linux-gnu-gcc aarch64-linux-gnu-nm \
@@ -219,7 +254,10 @@ INTERPRETER=$(
 }
 
 SYMBOL_TABLE=$($READELF -sW "$OUTPUT")
-grep -Eq 'UND[[:space:]]+__stack_chk_guard@GLIBC_2[.]17[[:space:]]+[(]9[)]$' \
+# The parenthesized version-table index is link-order metadata and can change
+# when another import disappears.  The provider/version contract is checked
+# independently below; never pin that incidental numeric index.
+grep -Eq 'UND[[:space:]]+__stack_chk_guard@GLIBC_2[.]17([[:space:]]+[(][0-9]+[)])?$' \
   <<< "$SYMBOL_TABLE" || {
     echo "AArch64 stack-protector guard contract changed" >&2
     exit 1
@@ -232,7 +270,7 @@ fi
 VERSION_NEEDS=$($READELF -VW "$OUTPUT")
 printf '%s\n' "$VERSION_NEEDS" | awk '
   /Version: 1  File:/ { provider = $0 }
-  /Name: GLIBC_2[.]17/ && /Version: 9$/ &&
+  /Name: GLIBC_2[.]17/ &&
       provider ~ /File: ld-linux-aarch64[.]so[.]1/ {
     found = 1
   }

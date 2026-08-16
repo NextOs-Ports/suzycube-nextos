@@ -9,14 +9,43 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
 PORT = Path(__file__).resolve().parents[1]
-REPO = PORT.parents[1]
 PUBLIC_ELF = PORT / "build" / "suzycube-nextos"
+
+
+def resolve_framework_repository() -> Path:
+    configured = os.environ.get("SC_FRAMEWORK_REPOSITORY")
+    direct = os.environ.get("SC_FRAMEWORK_ROOT_HOST")
+    candidates = []
+    if configured:
+        candidates.append(Path(configured))
+    elif direct:
+        candidates.append(Path(direct).parent)
+    else:
+        result = subprocess.run(
+            ("git", "-C", str(PORT), "rev-parse", "--show-toplevel"),
+            text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            check=False)
+        if result.returncode != 0:
+            raise AssertionError("Suzy Cube checkout is not a Git repository")
+        top = Path(result.stdout.strip())
+        candidates.extend((top, PORT.parent, PORT.parents[1]))
+    for candidate in candidates:
+        candidate = candidate.resolve()
+        if (candidate / "framework/nxgenerator/nxgenerator.py").is_file():
+            return candidate
+    raise AssertionError(
+        "framework repository not found; set SC_FRAMEWORK_REPOSITORY")
+
+
+REPO = resolve_framework_repository()
+FRAMEWORK = REPO / "framework"
 
 
 def require(value, message):
@@ -50,34 +79,78 @@ def run(*argv, cwd=None):
     return result.stdout
 
 
-def check_launcher_is_generated():
-    """The launcher is a build artifact of nxport.json, never hand-edited: it
-    is regenerated here and compared byte for byte."""
+def check_project_is_generated():
+    """nxproject.json is the only declarative source for launcher, nxport,
+    PortMaster metadata, NXExtract and NXSplash integration."""
+    project = load_json(PORT / "nxproject.json")
     nxport = load_json(PORT / "nxport.json")
+    require(project["schema_version"] == 2, "nxproject schema drift")
+    expected_nxport = dict(project["nxport"])
+    expected_required = list(expected_nxport["required_files"])
+    if "nxsplash-nextos" not in expected_required:
+        expected_required.insert(1, "nxsplash-nextos")
+    expected_nxport["required_files"] = expected_required
+    require(expected_nxport == nxport,
+            "nxport differs from nxproject plus generated NXSplash")
     require(nxport["schema_version"] == 2, "nxport schema drift")
     require(nxport["id"] == "suzycube", "wrong port id")
     require(nxport["executable"] == "suzycube-nextos", "wrong executable")
     require(nxport["launcher_name"] == "Suzy Cube.sh", "wrong launcher name")
-    require(nxport["nxextract"]["version"] == "1.2.6", "nxextract pin drift")
+    require(nxport["nxextract"]["version"] == "1.2.10", "nxextract pin drift")
     require(nxport["home_mode"] == "port",
             "saves must stay inside the port directory")
 
-    generator = REPO / "framework/nxbootstrap/tools/generate-port.py"
-    version = (REPO / "framework/nxbootstrap/VERSION").read_text().strip()
+    generator = FRAMEWORK / "nxgenerator/nxgenerator.py"
+    bootstrap_version = (FRAMEWORK / "nxbootstrap/VERSION").read_text().strip()
     with tempfile.TemporaryDirectory() as tmp:
-        run(sys.executable, "-B", str(generator), str(PORT / "nxport.json"),
-            "--output", tmp)
-        regenerated = Path(tmp) / nxport["launcher_name"]
-        require(regenerated.read_bytes() ==
-                (PORT / nxport["launcher_name"]).read_bytes(),
-                "launcher differs from the generated one; do not hand-edit it")
-        require((Path(tmp) / "suzycube/nxport.json").read_bytes() ==
-                (PORT / "nxport.json").read_bytes(),
-                "nxport.json is not in canonical form")
+        output = Path(tmp) / "generated"
+        run(sys.executable, "-B", str(generator),
+            str(PORT / "nxproject.json"), "--source-root", str(PORT),
+            "--output", str(output))
+        generated_port = output / "suzycube"
+        comparisons = {
+            output / nxport["launcher_name"]: PORT / nxport["launcher_name"],
+            generated_port / "nxport.json": PORT / "nxport.json",
+            generated_port / "nxproject.json": PORT / "nxproject.json",
+            generated_port / "port.json": PORT / "port.json",
+            generated_port / "extractor.json": PORT / "extractor.json",
+            generated_port / "nxsplash-nextos": PORT / "nxsplash-nextos",
+            generated_port / "nxextract/nxextract.py":
+                PORT / "nxextract/nxextract.py",
+            generated_port / "nxextract/run-extractor.sh":
+                PORT / "nxextract/run-extractor.sh",
+            generated_port / "nxextract/nxextract-runtime-env.sh":
+                PORT / "nxextract/nxextract-runtime-env.sh",
+            generated_port / "nxextract/nxextract-ui":
+                PORT / "nxextract/nxextract-ui",
+        }
+        for generated, checked_in in comparisons.items():
+            require(generated.read_bytes() == checked_in.read_bytes(),
+                    "%s differs from nxgenerator output" % checked_in.name)
+
+        receipt = load_json(generated_port / "GENERATION.json")
+        require(receipt["generator"]["version"] == "0.2.10",
+                "nxgenerator receipt version drift")
+        require(receipt["source_pins"]["nxextract"]["version"] == "1.2.10",
+                "generated NXExtract engine pin drift")
+        require(receipt["source_pins"]["nxextract"]["ui_version"] == "1.2.9",
+                "generated NXExtract UI pin drift")
+        require(receipt["source_pins"]["nxsplash"]["version"] == "0.1.2",
+                "generated NXSplash pin drift")
 
     manifest = load_json(PORT / "nxrelease.json")
-    require(manifest["package"]["launcher_contract"]["version"] == version,
+    require(manifest["package"]["launcher_contract"]["version"] ==
+            bootstrap_version,
             "launcher_contract.version does not match framework VERSION")
+
+    metadata = load_json(PORT / "port.json")
+    require(metadata["version"] == 4, "PortMaster metadata must be schema v4")
+    require(metadata["attr"]["runtime"] == [],
+            "PortMaster runtime must be an explicit list")
+    require(metadata["attr"]["arch"] == ["aarch64"],
+            "PortMaster architecture drift")
+    require(metadata["attr"]["min_glibc"] == "2.27",
+            "PortMaster glibc floor drift")
 
 
 def check_retired_artifacts():
@@ -95,8 +168,16 @@ def check_recipe():
     run(sys.executable, "-B", str(PORT / "nxextract/nxextract.py"),
         "recipe-check", "--recipe", str(PORT / "extractor.json"))
     recipe = load_json(PORT / "extractor.json")
+    reference_container_sha = (
+        "49afbb38b5be44d2edbbb7ec4b3d0f8a8d805e6a39541e79e4d6d0c41e27ab0b"
+    )
+    require(reference_container_sha not in
+            (PORT / "extractor.json").read_text(encoding="utf-8"),
+            "reference APK SHA must identify evidence, never lock the recipe")
     require(recipe["input"]["packages"] == ["com.noodlecake.suzycube"],
             "recipe must refuse a different package")
+    require(recipe["abi_order"] == ["arm64-v8a"],
+            "recipe must fail closed on a different ABI")
     hooks = recipe.get("hooks", [])
     require(len(hooks) == 1 and hooks[0]["id"] == "suzycube-merge-data",
             "the APK+OBB merge hook is missing")
@@ -107,6 +188,26 @@ def check_recipe():
         root = rule["destination"].split("/")[0]
         require(root in committed,
                 "destination %s escapes the commit roots" % rule["destination"])
+
+
+def check_public_documentation():
+    public_paths = (
+        PORT / "README.md", PORT / "INSTALLATION.md", PORT / "NOTICE.md",
+        PORT / "nxextract-version.txt", PORT / "nxrelease.json")
+    public_text = "\n".join(
+        path.read_text(encoding="utf-8") for path in public_paths).lower()
+    for forbidden in ("apkpure", "apkmirror", "apkvision", "5play"):
+        require(forbidden not in public_text,
+                "public files reveal an APK origin: %s" % forbidden)
+
+    installation = (PORT / "INSTALLATION.md").read_text(encoding="utf-8")
+    for required in (
+            "## Português", "## English", "Suzy Cube 1.0.13",
+            "com.noodlecake.suzycube", "arm64-v8a", "113052018",
+            "49afbb38b5be44d2edbbb7ec4b3d0f8a8d805e6a39541e79e4d6d0c41e27ab0b"):
+        require(required in installation,
+                "INSTALLATION.md lacks required owner-data identity: %s" %
+                required)
 
 
 def check_manifest_pins():
@@ -199,12 +300,24 @@ def check_input_recovery_contract():
             "focus/hotplug must flush a neutral MotionEvent")
     require("sc_input_dpad_axes" in source,
             "the unit-tested full-level D-pad path is disconnected")
+    require("dlsym(RTLD_DEFAULT, \"SDL_JoystickGetVendor\")" in source and
+            "dlsym(RTLD_DEFAULT, \"SDL_JoystickGetProduct\")" in source,
+            "SDL 2.0.6 joystick identity must remain an optional runtime API")
+    require("SDL_JoystickGetVendor(joy)" not in source and
+            "SDL_JoystickGetProduct(joy)" not in source,
+            "public ELF must not raise its SDL floor for joystick identity")
+
+    bionic = (PORT / "src/bionic.c").read_text(encoding="utf-8")
+    require('A("reallocarray", my_reallocarray)' in bionic and
+            "E(reallocarray)" not in bionic,
+            "reallocarray must use the overflow-safe low-glibc shim")
 
 
 def main():
-    check_launcher_is_generated()
+    check_project_is_generated()
     check_retired_artifacts()
     check_recipe()
+    check_public_documentation()
     check_manifest_pins()
     check_public_elf()
     check_input_recovery_contract()

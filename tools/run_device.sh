@@ -1,22 +1,16 @@
 #!/usr/bin/env bash
-# Abre o jogo no device em PRIMEIRO PLANO com teto de tempo, le o codigo de
-# saida e traz o log de volta.  Nunca laco cego de espera.
-#
-#   tools/run_device.sh [segundos] [VAR=val ...]
+# Launch the installed candidate remotely without inventing a timeout/exit path.
 set -euo pipefail
-PORT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-DEV=${DEV:-192.168.31.73}
-DST=/storage/roms/ports/suzycube
-SECS=${1:-90}
-shift || true
-ENVS="$*"
 
-timeout $((SECS + 90)) ssh -o BatchMode=yes "root@$DEV" "
-cd $DST || exit 9
-nice -n 19 timeout -s KILL $SECS env $ENVS ./run.sh >/dev/null 2>&1
-echo \"__EXIT=\$?\"
-" 2>&1 | tail -3
+PORT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)
+DEV=${DEV:?set DEV to the IP authorized for this session}
+SSH_USER=${SSH_USER:-root}
+REMOTE=${SSH_USER}@${DEV}
+SCRIPT=${SC_INPUTTEST:-}
+SHOTS=${SC_SCREENSHOT_FRAMES:-}
 
-timeout 120 scp -o BatchMode=yes "root@$DEV:$DST/debug.log" \
-  "$PORT_DIR/logs/last.log" >/dev/null 2>&1 || true
-echo "[run] log em logs/last.log ($(wc -l < "$PORT_DIR/logs/last.log" 2>/dev/null || echo 0) linhas)"
+scp -q -o BatchMode=yes "$PORT_DIR/tools/launch_device.sh" \
+  "$REMOTE:/tmp/suzycube-launch-device.sh"
+timeout 60 ssh -o BatchMode=yes "$REMOTE" \
+  "chmod 0755 /tmp/suzycube-launch-device.sh && /tmp/suzycube-launch-device.sh '$SCRIPT' '$SHOTS'"
+printf 'Suzy Cube launch requested on the explicitly authorized device %s\n' "$DEV"

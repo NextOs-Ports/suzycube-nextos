@@ -16,7 +16,7 @@ COPY=/tmp/sc_debug.log
 game_pid() {
   for q in /proc/[0-9]*; do
     e=$(readlink "$q/exe" 2>/dev/null)
-    case "$e" in "$DST/suzycube"*) echo "${q##*/}"; return 0 ;; esac
+    case "$e" in "$DST/suzycube-nextos"*) echo "${q##*/}"; return 0 ;; esac
   done
   return 1
 }
@@ -41,6 +41,6 @@ while [ "$i" -lt "$LOOPS" ]; do
   rss=$(awk '/VmRSS/{print $2}' "/proc/$pid/status" 2>/dev/null)
   avail=$(awk '/MemAvailable/{print $2}' /proc/meminfo)
   echo "[$i] pid=$pid rss=${rss}kB disponivel=${avail}kB" >> "$OUT"
-  cp -f "$DST/debug.log" "$COPY" 2>/dev/null
+  cp -f "$DST/log.txt" "$COPY" 2>/dev/null
 done
 echo "[fim] laco terminou apos $i voltas (teto $LOOPS)" >> "$OUT"

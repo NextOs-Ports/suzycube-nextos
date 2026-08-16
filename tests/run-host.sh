@@ -7,7 +7,11 @@ export TZ=UTC
 export PYTHONDONTWRITEBYTECODE=1
 
 PORT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)
-REPO_ROOT=$(git -C "$PORT_DIR" rev-parse --show-toplevel)
+# shellcheck source=../tools/framework-source.sh
+source "$PORT_DIR/tools/framework-source.sh"
+SC_FRAMEWORK_REPOSITORY=$(sc_resolve_framework_repository "$PORT_DIR")
+export SC_FRAMEWORK_REPOSITORY
+FRAMEWORK_ROOT="$SC_FRAMEWORK_REPOSITORY/framework"
 cd "$PORT_DIR"
 
 INPUT_EVDEV_TEST=$(mktemp "${TMPDIR:-/tmp}/suzycube-input-evdev-test.XXXXXX")
@@ -23,35 +27,42 @@ trap cleanup EXIT INT TERM
 
 SDL_CFLAGS=$(pkg-config --cflags sdl2)
 "${HOSTCC:-cc}" -std=c11 -Wall -Wextra -Werror -Isrc $SDL_CFLAGS \
-  -I"$REPO_ROOT/framework/nxinput/include" \
-  -I"$REPO_ROOT/framework/nxinput/src" \
+  -I"$FRAMEWORK_ROOT/nxinput/include" \
+  -I"$FRAMEWORK_ROOT/nxinput/src" \
   tests/test_input_policy.c \
-  "$REPO_ROOT/framework/nxinput/src/nxinput_core.c" \
+  "$FRAMEWORK_ROOT/nxinput/src/nxinput_core.c" \
   -lm -o "$INPUT_POLICY_TEST"
 "$INPUT_POLICY_TEST"
 
-for script in build_universal.sh "Suzy Cube.sh" \
+for script in build_universal.sh "Suzy Cube.sh" tools/*.sh \
               nxextract/run-extractor.sh nxextract/nxextract-runtime-env.sh \
               package/build-package.sh; do
   bash -n "$script"
 done
 
 python3 -B nxextract/nxextract.py recipe-check --recipe extractor.json
-python3 -B -m py_compile nxextract/merge-suzycube-data.py
+python3 -B -m py_compile nxextract/merge-suzycube-data.py \
+  package/render-manifest.py tests/test_suzycube_contract.py
 ./build_universal.sh
+NXABI_REPORT=$(mktemp "${TMPDIR:-/tmp}/suzycube-nxabi.XXXXXX")
+python3 -B "$FRAMEWORK_ROOT/nxabi/nxabi.py" audit \
+  build/suzycube-nextos nxextract/nxextract-ui nxsplash-nextos \
+  --json "$NXABI_REPORT" --quiet
+rm -f -- "$NXABI_REPORT"
+python3 -B package/render-manifest.py --check
 python3 -B tests/test_suzycube_contract.py
-python3 -B ../../framework/nxrelease/nxrelease.py validate \
+python3 -B "$FRAMEWORK_ROOT/nxrelease/nxrelease.py" validate \
   --manifest nxrelease.json
 
-DRY_ADD=$(git -C "$REPO_ROOT" add -n --all ports/suzycube)
+DRY_ADD=$(git -C "$PORT_DIR" add -n --all .)
 if grep -E \
-  "ports/suzycube/(\.build|build|gamedata|stage|verify)/|ports/suzycube/(suzycube|suzycube-nextos)'|\.(apk|apkm|apks|xapk|obb|so|zip|raw|png)'" \
+  "add '(.build|build|gamedata|stage|verify|logs)/|add '(suzycube|suzycube-nextos)'|\.(apk|apkm|apks|xapk|obb|so|zip|raw)'" \
   <<< "$DRY_ADD"; then
   printf '%s\n' 'Git dry-run would stage built or owner data' >&2
   exit 1
 fi
 
-git -C "$REPO_ROOT" diff --check -- ports/suzycube
+git -C "$PORT_DIR" diff --check
 printf '%s\n' \
   'SUZY CUBE HOST GATE: PASS' \
   'physical_device_evidence=0 baseline_physical_release=1.1.0 proprietary_payload_packaged=0 guest_execution=0'
