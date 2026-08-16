@@ -1,153 +1,172 @@
-# Suzy Cube — universal AArch64 Unity/IL2CPP port
+# Suzy Cube — port universal AArch64 / universal AArch64 port
 
-[![Release](https://img.shields.io/github/v/release/NextOs-Ports/suzycube-nextos)](https://github.com/NextOs-Ports/suzycube-nextos/releases/latest)
-[![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](https://github.com/NextOs-Ports/suzycube-nextos/blob/main/LICENSE)
+[![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](LICENSE)
 
-**Language / Idioma:** [English](#english) · [Português](#português)
+**Idioma / Language:** [Português](#português) · [English](#english)
 
-This project is an independent compatibility loader. It does not distribute
-Suzy Cube's APK, Unity/IL2CPP libraries, art, music or any other proprietary
-game data.
+Este repositório contém um loader de compatibilidade independente e o pacote
+PortMaster BYO-data. Ele não contém nem redistribui APK, OBB, bibliotecas Unity,
+arte, música ou qualquer outro dado proprietário de Suzy Cube.
 
-[Download the latest PortMaster package / Baixar o pacote PortMaster](https://github.com/NextOs-Ports/suzycube-nextos/releases/latest)
-
-## Community
-
-Questions, bug reports, help getting the port running, and news about the next ones:
-
-💬 **Discord:** [discord.gg/DHfY62eDNN](https://discord.gg/DHfY62eDNN)
-
-## English
-
-### Status
-
-Suzy Cube (Noodlecake / Louard Fischer, Unity 2017.4.40f1 IL2CPP arm64) runs
-through its native Unity flow. One universal AArch64 loader — built against
-glibc 2.28 with an effective floor of `GLIBC_2.27` and ceiling `GLIBC_2.30` —
-runs unchanged on NextOS and on PortMaster firmwares such as ArkOS/R36S, with
-no per-device build.
-
-| Physical target | Display / GPU | Validated result |
-|---|---|---|
-| ArkOS / R36S (RG351MP) | Mali-G31, KMSDRM, glibc 2.30 | 59.7 fps at 640×480, ALSA audio |
-| NextOS Amlogic-old | Mali-450 Utgard, fbdev | 55–56 fps at 1280×720, PulseAudio |
-| NextOS X5M | Mali-G310 Valhall, KMSDRM | 59.7 fps at 1920×1080, ALSA audio |
-
-There is no Android and no emulator in the path: the loader maps the original
-arm64 objects (`libmain.so`, `libunity.so`, `libil2cpp.so`), runs their real
-`init_array` and `JNI_OnLoad`, and drives the native UnityPlayer lifecycle
-(`initJni` → `nativeRecreateGfxState` → `nativeResume` → `nativeRender`).
-
-![Native gameplay](media/screenshot.png)
-
-![Save-slot menu with the physical pad](media/menu.png)
-
-- Video: resolution is read from the device, never hardcoded.
-- Audio: Unity's internal FMOD at 24000 Hz stereo, output through the system SDL.
-- Controls: factory InControl — the physical pad is delivered as a real
-  `InputDevice`; SDL plus an authoritative `evdev` snapshot. No cursor, no
-  synthetic touch. Pads without physical SELECT/START (RK3326 family) map
-  `BTN_TRIGGER_HAPPY1/2` directly.
-- Save: `PlayerPrefs` in `home/shared-preferences.bin`, survives close/reopen.
-- Textures: the game's own ETC1; residual ETC2 is decoded in software when the
-  driver lacks it.
-- Shaders: a GLES2 variant ships in the game data; no ES3→ES2 shim.
-
-### Controls
-
-| Button | Action |
-|---|---|
-| D-pad / left stick | move, navigate menus |
-| South face button | jump / confirm |
-| L1 / R1 | switch worlds on the map |
-| START | start / pause |
-| SELECT + START | quit through the native path (pause + save + exit) |
-
-Suzy Cube uses Xbox glyphs by position. Some R36S firmwares map buttons by the
-printed Nintendo letters, swapping A/B and X/Y relative to those glyphs. The
-port compares the SDL mapping against the kernel's semantic positions and only
-normalizes the two pairs when that inversion is proven; positional mappings
-are left untouched.
-
-Since v1.1.4, both sticks use radial 0.40/0.30 engage/release hysteresis,
-L2/R2 respect SDL's standardized zero rest value (including digital-button
-trigger mappings), and focus/hotplug boundaries explicitly send neutral motion
-to Unity. This prevents worn-stick drift and controls that appear to stay held
-on ROCKNIX/muOS.
-
-### Installation
-
-See [`INSTALLATION.md`](INSTALLATION.md). In short: extract the release ZIP
-over your firmware's `ports` folder, place your own legally obtained APK in
-`suzycube/gamedata/`, and launch once — the installer (NXExtract) does the
-rest. The launcher is clean, PortMaster-style: it never stops or restarts
-EmulationStation.
-
-### Diagnostics
-
-All off by default; the shipped binary is silent. `SC_VERBOSE`, `SC_LOGCAT`,
-`SC_JNILOG`, `SC_FPS`, `SC_FRAMES`, `SC_AUDIO_TRACE`, `SC_INPUTLOG`,
-`SC_FACE_LAYOUT` and `SC_SCREENSHOT` are documented in
-[`docs`](INSTALLATION.md) and in the loader source under [`src/`](src/).
+This repository contains an independent compatibility loader and a BYO-data
+PortMaster package. It does not contain or redistribute Suzy Cube's APK, OBB,
+Unity libraries, artwork, music, or any other proprietary game data.
 
 ## Português
 
-### Estado
+### Visão geral e estado
 
-O Suzy Cube (Noodlecake / Louard Fischer, Unity 2017.4.40f1 IL2CPP arm64) roda
-pelo fluxo nativo da Unity. Um único loader AArch64 universal — compilado
-contra glibc 2.28, com piso efetivo `GLIBC_2.27` e teto `GLIBC_2.30` — roda
-sem alteração no NextOS e em firmwares PortMaster como ArkOS/R36S, sem build
-por aparelho.
+O port executa os objetos ARM64 originais do Suzy Cube 1.0.13 (Unity
+2017.4.40f1 IL2CPP) diretamente no Linux AArch64. Não há emulação de CPU nem
+atalho no boot: o loader preserva `init_array`, `JNI_OnLoad` e o ciclo nativo
+`initJni` → `nativeRecreateGfxState` → `nativeResume` → `nativeRender`.
 
-| Aparelho | GPU | Resultado validado |
-|---|---|---|
-| ArkOS / R36S (RG351MP) | Mali-G31, KMSDRM, glibc 2.30 | 59,7 fps a 640×480, áudio ALSA |
-| NextOS Amlogic-old | Mali-450 Utgard, fbdev | 55–56 fps a 1280×720, PulseAudio |
-| NextOS X5M | Mali-G310 Valhall, KMSDRM | 59,7 fps a 1920×1080, áudio ALSA |
+A linha 1.1.12 reconcilia todos os fixes de input das versões 1.1.10 e 1.1.11 e
+migra launcher, metadata e empacotamento para uma fonte declarativa única. A
+alegação de suporte físico da versão candidata só é promovida depois que o ZIP
+exato e seu SHA-256 passam pela matriz de aparelhos; resultados de releases
+anteriores permanecem apenas como baseline histórico.
 
-Não há Android nem emulador no caminho: o loader mapeia os objetos arm64
-originais (`libmain.so`, `libunity.so`, `libil2cpp.so`), roda os `init_array`
-e `JNI_OnLoad` de verdade e dirige o ciclo de vida nativo do UnityPlayer.
+![Gameplay nativo](media/screenshot.png)
 
-- Vídeo: resolução lida do aparelho, nunca cravada.
-- Áudio: FMOD interno da Unity a 24000 Hz estéreo, saída pelo SDL do sistema.
-- Controle: InControl de fábrica — pad físico como `InputDevice` real; SDL +
-  snapshot `evdev` autoritativo. Sem cursor, sem toque sintético. Pads sem
-  SELECT/START físicos (família RK3326) usam `BTN_TRIGGER_HAPPY1/2`.
-- Save: `PlayerPrefs` em `home/shared-preferences.bin`, sobrevive a fechar e
-  reabrir.
-- Texturas: ETC1 do próprio jogo; ETC2 residual decodificado em software
-  quando o driver não o tem.
-- Shaders: variante GLES2 presente nos dados; sem shim ES3→ES2.
+![Seleção de save com controle físico](media/menu.png)
+
+### Arquitetura
+
+- `src/`: loader ELF, bridges Bionic/JNI/EGL/áudio/input e loop Unity.
+- `nxproject.json`: fonte declarativa de `nxport.json`, `port.json`, launcher,
+  NXExtract e NXSplash.
+- `extractor.json`: receita transacional que valida package ID, ABI, estrutura
+  e payloads internos antes de publicar os dados.
+- `FRAMEWORK-BUILD-PIN.json`: fixa por commit e digest as árvores de
+  `nxcompat 0.2.1`, `nxinput 0.3.1` e `nxaudio 0.2.0` usadas no build.
+- `nxrelease.json`: inventário completo, hashes, dependências, licença e teto
+  público `GLIBC_2.30`.
+
+O launcher autocontido é gerado por `nxbootstrap 0.6.15`. A instalação usa o
+engine NXExtract 1.2.10 com a interface gráfica imutável 1.2.9; a tela NEXT OS
+de cinco segundos é o NXSplash 0.1.2 separado. O fluxo público é:
+
+```text
+PortMaster → NXExtract (quando necessário) → validação dos dados
+           → NXSplash → loader → Unity nativa
+```
+
+### Problemas resolvidos
+
+- Dados divididos entre APK e OBB, inclusive arquivos `.splitN`, são unidos em
+  ordem numérica e publicados somente após validação completa.
+- O D-pad envia nível contínuo; sticks usam deadzone radial com histerese
+  0,40/0,30; gatilhos respeitam o repouso SDL; perda de foco e hotplug enviam
+  estado neutro.
+- A posição dos botões de face só é normalizada quando o mapeamento invertido é
+  comprovado. O port não rouba D-pad, botão sul ou analógico direito para um
+  cursor.
+- A metadata PortMaster v4 declara `runtime` como lista explícita e passa pelo
+  parser real e pelo ciclo offline instalar/atualizar/remover/reinstalar.
+- Falhas antes do log normal, fases NXExtract/NXSplash/runtime e resultado
+  terminal deixam evidência estruturada sem alterar a interface visual.
 
 ### Controles
 
-| Botão | Ação |
+| Entrada | Ação |
 |---|---|
-| D-pad / analógico esquerdo | mover, navegar nos menus |
-| Botão sul | pular / confirmar |
+| D-pad / analógico esquerdo | mover e navegar |
+| Botão de face sul | pular / confirmar |
 | L1 / R1 | trocar de mundo no mapa |
-| START | começar / pausar |
-| SELECT + START | sair pelo caminho nativo (pause + save + fim) |
+| START | iniciar / pausar |
+| SELECT + START | salvar e sair pelo fluxo nativo |
 
-Desde a v1.1.4, os dois analógicos usam deadzone radial com histerese
-0,40/0,30, L2/R2 respeitam o repouso zero padronizado pelo SDL (inclusive em
-mapeamentos de gatilhos por botões digitais), e foco/hotplug sempre enviam
-movimento neutro ao Unity. Isso elimina drift de sticks gastos e controles que
-pareciam continuar pressionados no ROCKNIX/muOS.
+### Dados e instalação
 
-### Instalação
+Consulte [INSTALLATION.md](INSTALLATION.md). O ZIP é BYO-data: copie sua cópia
+legal compatível para `suzycube/gamedata/` e inicie o port. O instalador aceita
+diferenças legítimas de assinatura ou empacotamento quando package, versão,
+ABI, estrutura e payloads internos permanecem compatíveis; o SHA-256 integral
+do APK de referência é evidência, não a única trava da receita.
 
-Ver [`INSTALLATION.md`](INSTALLATION.md). Em resumo: extrair o ZIP da release
-sobre a pasta `ports` do firmware, colocar o seu APK obtido legalmente em
-`suzycube/gamedata/` e abrir uma vez — o instalador (NXExtract) faz o resto.
-O launcher é limpo, padrão PortMaster: ele **nunca** para nem religa o
-EmulationStation.
+### Build e gates
 
-## License
+O build público usa uma imagem offline por digest, um sysroot apenas para
+headers e as árvores do framework materializadas do pin imutável:
 
-The loader and support code in this repository are released under the
-[GPL-3.0](LICENSE). Third-party notices are in [`NOTICE.md`](NOTICE.md) and
-[`licenses/`](licenses/). No proprietary game data is included — you provide
-your own copy of the game.
+```sh
+export SC_FRAMEWORK_REPOSITORY=/caminho/do/nextos_ports_android
+export NEXTOS_ROOT=/caminho/do/arquivo-nextos
+./tests/run-host.sh
+./package/build-package.sh /caminho/novo/para-o-candidato
+```
+
+O destino de release deve ser novo: o pipeline nunca sobrescreve candidato.
+Ele recompila, audita todos os ELFs Linux, valida JSON estrito, rejeita o
+comando externo `stat`, cria o ZIP, reabre seus bytes e executa o contrato real
+do PortMaster. Dados do jogo nunca entram no build nem no ZIP.
+
+### Mapa de fontes e licenças
+
+| Caminho | Responsabilidade |
+|---|---|
+| `src/main.c`, `src/android.c`, `src/jni.c` | lifecycle e ambiente Android |
+| `src/nx_elf.c` | carga e relocação ELF do jogo |
+| `src/egl*.c`, `src/etc2_decode.c` | apresentação GLES2 e fallback ETC2 |
+| `src/audio.c` | áudio Unity/FMOD para SDL |
+| `src/input*.c` | controle SDL/evdev e política de input |
+| `nxextract/merge-suzycube-data.py` | merge transacional específico do jogo |
+| `tests/` | unidades de input e contrato hermético de release |
+
+O código do port é [GPL-3.0-only](LICENSE). Avisos e atribuições estão em
+[NOTICE.md](NOTICE.md) e `licenses/`. Os dados e marcas do jogo pertencem aos
+respectivos titulares e não são licenciados por este projeto.
+
+## English
+
+### Overview and status
+
+The port runs the original ARM64 objects from Suzy Cube 1.0.13 (Unity
+2017.4.40f1 IL2CPP) directly on AArch64 Linux. It does not emulate the CPU or
+shortcut boot: `init_array`, `JNI_OnLoad`, and the native Unity lifecycle are
+preserved in their original order.
+
+Version line 1.1.12 reconciles the 1.1.10 and 1.1.11 input fixes and migrates
+the launcher, metadata, and packaging to one declarative source. Physical
+support for a candidate is promoted only after that exact ZIP and SHA-256 pass
+the device matrix; older release results remain historical baselines.
+
+### Runtime and compatibility
+
+- Resolution comes from the device and is never hardcoded.
+- Unity's FMOD output is bridged through the firmware SDL audio provider.
+- The factory InControl path receives a real physical controller through SDL
+  plus an authoritative evdev snapshot; there is no synthetic touch cursor.
+- PlayerPrefs persist under the port-owned home directory.
+- The game uses its GLES2 shader path and ETC1 textures; residual ETC2 is
+  decoded only where the driver lacks support.
+
+The generated public chain is PortMaster → NXExtract → payload validation →
+NXSplash → loader → native Unity. `nxbootstrap 0.6.15`, NXExtract engine
+1.2.10, immutable NXExtract UI 1.2.9, and NXSplash 0.1.2 are content-pinned.
+
+### Controls
+
+| Input | Action |
+|---|---|
+| D-pad / left stick | move and navigate |
+| South face button | jump / confirm |
+| L1 / R1 | switch worlds on the map |
+| START | start / pause |
+| SELECT + START | save and leave through the native path |
+
+### Installation, build, and diagnostics
+
+Follow [INSTALLATION.md](INSTALLATION.md) for the exact accepted owner-data
+identity and directory layout. The full reference APK hash records tested
+evidence but does not lock compatibility to one container signature.
+
+For a source build, set `SC_FRAMEWORK_REPOSITORY` and `NEXTOS_ROOT` to clean
+checkouts/archives, then run `./tests/run-host.sh`. Logs are written to
+`suzycube/log.txt`; NXExtract also keeps a detailed private installation log
+and an atomic terminal-result receipt. Diagnostic environment variables are
+opt-in and the release binary is quiet by default.
+
+The loader and integration code are GPL-3.0-only. See [NOTICE.md](NOTICE.md)
+for upstream acknowledgements. No proprietary game data is included.

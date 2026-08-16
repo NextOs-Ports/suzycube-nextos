@@ -1,86 +1,143 @@
-# Suzy Cube for NextOS — installation
+# Suzy Cube — instalação / installation
 
-This package is **bring-your-own-data**. It contains the compatibility loader,
-the launcher and the installer. It never contains the game.
+Este é um pacote **BYO-data**: ele contém apenas o loader, o launcher e o
+instalador. Você precisa fornecer os dados de uma cópia legal compatível do
+jogo. O pacote público nunca contém o jogo.
 
-## 1. Install the port
+This is a **BYO-data** package: it contains only the loader, launcher, and
+installer. You must provide data from a compatible lawfully owned copy of the
+game. The public package never contains the game.
 
-Unpack the ZIP into your firmware's ports directory, so that you end up with:
+## Português
 
+### 1. Identidade dos dados testados
+
+| Campo | Valor |
+|---|---|
+| Jogo e versão | Suzy Cube 1.0.13 |
+| Package ID | `com.noodlecake.suzycube` |
+| ABI obrigatória | `arm64-v8a` |
+| Tamanho do APK de referência | `113052018` bytes |
+| SHA-256 do APK de referência | `49afbb38b5be44d2edbbb7ec4b3d0f8a8d805e6a39541e79e4d6d0c41e27ab0b` |
+
+O tamanho e o SHA-256 identificam o container exato usado como referência de
+teste. Eles não são a única condição de aceitação: o NXExtract valida package
+ID, contrato de versão, ABI, estrutura e payloads internos críticos. Uma cópia
+legítima com assinatura ou empacotamento diferente pode ser aceita quando
+entrega o mesmo conteúdo compatível; outro jogo, ABI errada ou build interna
+incompatível falha fechado.
+
+### 2. Instale o ZIP
+
+Extraia o ZIP sobre a pasta `ports` do firmware. O layout final obrigatório é:
+
+```text
+ports/
+├── Suzy Cube.sh
+└── suzycube/
+    ├── INSTALLATION.md
+    ├── port.json
+    ├── suzycube-nextos
+    ├── nxsplash-nextos
+    ├── nxextract/
+    └── gamedata/
 ```
-ports/Suzy Cube.sh
-ports/suzycube/
-```
 
-Common locations: `/roms/ports` (ArkOS, R36S), `/storage/roms/ports` (NextOS),
-`/roms2/ports` on dual-card setups.
+Diretórios comuns incluem `/roms/ports`, `/roms2/ports` e
+`/storage/roms/ports`. Preserve maiúsculas, espaços e nomes exatamente como no
+ZIP.
 
-## 2. Provide your own copy of the game
+### 3. Coloque os seus dados
 
-The port is validated against **Suzy Cube v1.0.13 arm64**
-(`com.noodlecake.suzycube`). Other arm64 builds of the same package are
-accepted by the installer and should work; ARMv7-only copies do **not** work.
+Copie o APK ARM64 para:
 
-Drop your lawfully acquired **ARM64 Suzy Cube APK** into:
-
-```
+```text
 ports/suzycube/gamedata/
 ```
 
-**The Google Play build ships its data in a separate OBB file.** If your APK
-came with a `main.<n>.com.noodlecake.suzycube.obb` (on the phone it lives in
-`Android/obb/com.noodlecake.suzycube/`), you MUST copy it into the same folder
-— the APK alone is not enough. Some repacked builds carry the OBB inside the
-APK instead; the installer handles both without being told which one you have,
-and tells you in `suzycube/nxextract.log` if the data is incomplete.
+Se a sua cópia legal inclui um OBB separado, copie também o arquivo `*.obb`
+correspondente para o mesmo diretório. Não renomeie os conteúdos internos nem
+extraia manualmente o APK/OBB.
 
-## 3. Launch it once
+### 4. Primeira abertura
 
-Start **Suzy Cube** from your frontend. The first launch runs the installer
-instead of the game:
+Abra **Suzy Cube** pelo frontend. O NXExtract:
 
-* it checks the package name, the ABI and the three native libraries;
-* it extracts the asset tree from the APK and, when present, from the OBB;
-* Suzy Cube ships its data cut into `.splitN` chunks in **both** sources, so the
-  installer rejoins them **in numeric order**. A missing chunk is a hard error,
-  never a silently truncated file;
-* only a fully validated tree is committed. If anything fails, nothing is
-  written to your game folder and the next launch starts over cleanly.
+1. identifica package, versão e ABI;
+2. valida as três bibliotecas nativas e a árvore Unity;
+3. une dados do APK e do OBB e remonta `.splitN` em ordem numérica;
+4. valida o resultado completo em staging privado;
+5. publica `assets/` e `lib/` atomicamente somente após sucesso.
 
-Expect this to take a few minutes and roughly **1 GB of free space** on the
-card while it runs — the installer deletes each chunk as it is consumed, so the
-peak is transient. From the second launch on, the game starts directly.
+Reserve aproximadamente 1 GiB livre durante a instalação. Uma falha não
+publica uma árvore parcial; corrija os dados e abra novamente. Nas aberturas
+seguintes, o jogo usa os dados já validados.
 
-## 4. Controls
+### 5. Controles e diagnóstico
 
-| Input | Action |
+| Entrada | Ação |
 |---|---|
-| D-pad / left stick | move |
-| South face button (Xbox A; printed B on an R36S) | jump / confirm |
-| L1 / R1 | switch world on the map |
-| **SELECT + START** | save and quit back to the frontend |
+| D-pad / analógico esquerdo | mover e navegar |
+| Botão de face sul | pular / confirmar |
+| L1 / R1 | trocar de mundo no mapa |
+| START | iniciar / pausar |
+| SELECT + START | salvar e sair |
 
-The game displays Xbox-style glyphs by position. The port automatically fixes
-the common R36S firmware mapping that follows the printed Nintendo-style
-letters (A/B and X/Y reversed by position). Existing positional mappings are
-left unchanged. You are never asked to capture buttons.
+O log principal fica em `ports/suzycube/log.txt`. O instalador mantém seu log
+detalhado e um resumo terminal estruturado dentro do diretório do port, sem
+registrar a origem pública dos dados.
 
-Mapped digital buttons are also resampled from the kernel every frame on pads
-that can be matched unambiguously. This prevents a dropped release event from
-leaving a D-pad direction stuck. As a compatibility override,
-`SC_FACE_LAYOUT=firmware` preserves the firmware's face-button mapping.
+## English
 
-Version 1.1.4 also filters both sticks with a radial 0.40/0.30 engage/release
-hysteresis, treats SDL controller triggers as neutral at their standardized
-zero rest value, and sends an explicit neutral motion sample after focus loss
-or controller hotplug. Together these prevent worn-stick drift and digital
-L2/R2 mappings from behaving as if a control remained held.
+### 1. Tested owner-data identity
 
-## Troubleshooting
+| Field | Value |
+|---|---|
+| Game and version | Suzy Cube 1.0.13 |
+| Package ID | `com.noodlecake.suzycube` |
+| Required ABI | `arm64-v8a` |
+| Reference APK size | `113052018` bytes |
+| Reference APK SHA-256 | `49afbb38b5be44d2edbbb7ec4b3d0f8a8d805e6a39541e79e4d6d0c41e27ab0b` |
 
-The port writes `log.txt` next to the launcher, and the installer writes
-`suzycube/nxextract.log`. Those two files describe every decision made, in
-order — start there.
+The size and SHA-256 identify the exact container used as test evidence. They
+are not the only acceptance condition: NXExtract validates package ID, version
+contract, ABI, structure, and critical internal payloads. A lawful copy with a
+different signature or packaging may be accepted when it supplies the same
+compatible content; another game, wrong ABI, or internally incompatible build
+fails closed.
 
-If the game exits immediately, the most common cause is an APK for the wrong
-architecture (ARMv7 instead of ARM64) or an incomplete download.
+### 2. Install the ZIP
+
+Extract the ZIP over the firmware's `ports` directory. The required result is:
+
+```text
+ports/
+├── Suzy Cube.sh
+└── suzycube/
+    ├── INSTALLATION.md
+    ├── port.json
+    ├── suzycube-nextos
+    ├── nxsplash-nextos
+    ├── nxextract/
+    └── gamedata/
+```
+
+Common roots include `/roms/ports`, `/roms2/ports`, and
+`/storage/roms/ports`. Preserve case, spaces, and names exactly as shipped.
+
+### 3. Supply your data
+
+Copy the ARM64 APK into `ports/suzycube/gamedata/`. If your lawful copy also
+contains a separate OBB, place the matching `*.obb` in the same directory. Do
+not manually extract or rearrange APK/OBB contents.
+
+### 4. First launch
+
+Launch **Suzy Cube** from the frontend. NXExtract identifies package/version/
+ABI, validates the native libraries and Unity tree, merges APK and OBB data,
+reassembles numeric `.splitN` parts, and atomically publishes only a fully
+validated result. Allow about 1 GiB of temporary free space. A failed attempt
+does not leave a partial installation; correct the input and launch again.
+
+The main log is `ports/suzycube/log.txt`. NXExtract also keeps a detailed log
+and an atomic terminal summary without publishing the origin of owner data.

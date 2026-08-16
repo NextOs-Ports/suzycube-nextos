@@ -4,8 +4,8 @@
       "aarch64"
     ],
     "min_glibc": "2.27",
-    "title": "Suzy Cube",
-    "runtime": null
+    "runtime": [],
+    "title": "Suzy Cube"
   },
   "items": [
     "Suzy Cube.sh",
@@ -13,5 +13,5 @@
   ],
   "items_opt": [],
   "name": "suzycube.zip",
-  "version": 1
+  "version": 4
 }

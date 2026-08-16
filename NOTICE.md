@@ -14,8 +14,8 @@ upstream projects.
 
 The port carries its own ELF loader, Bionic shim and JNI bridge, and uses the
 repository's universal `nxcompat`, `nxinput` and `nxaudio` components for the
-host contract. NXExtract 1.2.6, including its canonical low-glibc AArch64 setup
-UI, is redistributed unmodified under the MIT license; see
+host contract. NXExtract engine 1.2.10, its immutable graphical UI release
+1.2.9 and NXSplash 0.1.2 are redistributed unmodified under their respective licenses; see
 `licenses/NXExtract-MIT.txt`. SDL2, EGL, GLES and standard system libraries are
 supplied by the target firmware and are not bundled.
 
@@ -26,7 +26,6 @@ by this project's license and are never present in the public package. Users
 must provide files from their own lawful Android copy.
 
 Physical validation used a user-supplied v1.0.13 payload whose useful files are
-content-pinned by the installer. The APK itself is not redistributed and no
-claim is made that it is an original store artifact. This independent
+content-validated by the installer. The APK itself is not redistributed. This independent
 interoperability project is not affiliated with or endorsed by Noodlecake
-Studios, Louard Games, Unity Technologies, Google or another rightsholder.
+Studios, Louard Games, Unity Technologies or another rightsholder.

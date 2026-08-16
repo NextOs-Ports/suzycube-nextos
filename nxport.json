@@ -8,7 +8,7 @@
   "launcher_name": "Suzy Cube.sh",
   "nxextract": {
     "mode": "yes",
-    "version": "1.2.6"
+    "version": "1.2.10"
   },
   "prepare_script": "",
   "private_library_paths": [],
@@ -26,6 +26,7 @@
   ],
   "required_files": [
     "suzycube-nextos",
+    "nxsplash-nextos",
     "lib/libmain.so",
     "lib/libunity.so",
     "lib/libil2cpp.so",

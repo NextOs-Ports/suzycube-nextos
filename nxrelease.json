@@ -1,125 +1,89 @@
 {
-  "schema_version": 2,
-  "source_root": ".",
-  "package": {
-    "id": "suzycube",
-    "version": "1.1.9",
-    "profile": "universal-portmaster",
-    "launcher": "Suzy Cube.sh",
-    "launcher_chain": [
-      "Suzy Cube.sh"
-    ],
-    "launcher_contract": {
-      "generator": "nxbootstrap",
-      "version": "0.6.5",
-      "config_path": "suzycube/nxport.json",
-      "config_sha256": "ecea3173201b2e41cba9a879a874db60862267e3aebf6927c89e9865fd50984e"
-    },
-    "port_dir": "suzycube",
-    "license": {
-      "spdx_id": "GPL-3.0-only",
-      "source_url": "https://github.com/NextOs-Ports/nextos_ports_android",
-      "file": "suzycube/LICENSE"
-    }
-  },
-  "release": {
-    "source_date_epoch": 1786406400,
-    "max_glibc": "2.30",
-    "compression": "deflated"
-  },
-  "nxextract": {
-    "path": "suzycube/nxextract/nxextract.py",
-    "version": "1.2.6",
-    "minimum_version": "1.2.6",
-    "sha256": "a4a8e5d3bf2a1344491e27921c54430ee9b4e3fedd0160631da96734fa3d5170",
-    "runner_path": "suzycube/nxextract/run-extractor.sh",
-    "runner_sha256": "179b72f02b9dfdf3ed1bdc382d074fb4ef07f83e3d62cfccfc74a950e68679c2",
-    "runtime_env_path": "suzycube/nxextract/nxextract-runtime-env.sh",
-    "runtime_env_sha256": "332919a9960d4317563b647f9932d1a4367da147a425fe2f78eafd706f01563f",
-    "recipe_path": "suzycube/extractor.json",
-    "recipe_sha256": "d0fb1725dca9b2b6cbb8a90f1a829a9c7e999b2f97d8cefb3617cef69edd0781"
-  },
   "dependencies": [
     {
-      "namespace": "linux",
       "architecture": "aarch64",
-      "soname": "ld-linux-aarch64.so.1",
-      "provider": "firmware"
+      "namespace": "linux",
+      "provider": "firmware",
+      "soname": "ld-linux-aarch64.so.1"
     },
     {
-      "namespace": "linux",
       "architecture": "aarch64",
-      "soname": "libSDL2-2.0.so.0",
-      "provider": "portmaster"
+      "namespace": "linux",
+      "provider": "portmaster",
+      "soname": "libSDL2-2.0.so.0"
     },
     {
-      "namespace": "linux",
       "architecture": "aarch64",
-      "soname": "libc.so.6",
-      "provider": "glibc-base"
+      "namespace": "linux",
+      "provider": "glibc-base",
+      "soname": "libc.so.6"
     },
     {
-      "namespace": "linux",
       "architecture": "aarch64",
-      "soname": "libdl.so.2",
-      "provider": "glibc-base"
+      "namespace": "linux",
+      "provider": "glibc-base",
+      "soname": "libdl.so.2"
     },
     {
-      "namespace": "linux",
       "architecture": "aarch64",
-      "soname": "libgcc_s.so.1",
-      "provider": "firmware"
+      "namespace": "linux",
+      "provider": "firmware",
+      "soname": "libgcc_s.so.1"
     },
     {
-      "namespace": "linux",
       "architecture": "aarch64",
-      "soname": "libm.so.6",
-      "provider": "glibc-base"
+      "namespace": "linux",
+      "provider": "glibc-base",
+      "soname": "libm.so.6"
     },
     {
-      "namespace": "linux",
       "architecture": "aarch64",
-      "soname": "libpthread.so.0",
-      "provider": "glibc-base"
+      "namespace": "linux",
+      "provider": "glibc-base",
+      "soname": "libpthread.so.0"
     },
     {
-      "namespace": "linux",
       "architecture": "aarch64",
-      "soname": "libz.so.1",
-      "provider": "firmware"
+      "namespace": "linux",
+      "provider": "firmware",
+      "soname": "libz.so.1"
     }
   ],
-  "portmaster_metadata": {
-    "port_json": {
-      "path": "suzycube/port.json",
-      "sha256": "bbf4d51823bc55be66bfc29a22f90e7fe2e9f64a251fd858a7dc2f749a7445e5"
-    },
-    "images": []
-  },
+  "exceptions": [],
   "files": [
     {
-      "source": "Suzy Cube.sh",
-      "target": "Suzy Cube.sh",
       "kind": "launcher",
       "mode": "0755",
-      "sha256": "b9c28006714c47387407a0d5a7810e373209845480c3ffe955daf66ba89f5a76"
+      "sha256": "1e69a40e6cbfad6476e53a1adc0ff96f6ff16aa0e808e0b21647e3962b6e2515",
+      "source": "Suzy Cube.sh",
+      "target": "Suzy Cube.sh"
     },
     {
-      "source": "nxport.json",
-      "target": "suzycube/nxport.json",
       "kind": "nxbootstrap-config",
       "mode": "0644",
-      "sha256": "ecea3173201b2e41cba9a879a874db60862267e3aebf6927c89e9865fd50984e"
+      "sha256": "3575064b140be69b4b40ee5b585c83d4b419bf3391e9bd2f0fd2eb7285f1d070",
+      "source": "nxport.json",
+      "target": "suzycube/nxport.json"
     },
     {
-      "source": "build/suzycube-nextos",
-      "target": "suzycube/suzycube-nextos",
-      "kind": "project-linux",
-      "mode": "0755",
-      "sha256": "cb05cda62ef5e2a990059fd7cf2b435b693fec5638e826cd8168d9533c50d56c",
+      "kind": "payload",
+      "mode": "0644",
+      "sha256": "880c4d693b9b55a2a8fc0ab7cfe2aebfa985c8634a938aa5ebb682bbfc04da94",
+      "source": "nxproject.json",
+      "target": "suzycube/nxproject.json"
+    },
+    {
+      "kind": "payload",
+      "mode": "0644",
+      "sha256": "5c786a8ad3c35fb716dd1e6e0b264b94ca32f1568759592d2251abcc8a4a51b9",
+      "source": "FRAMEWORK-BUILD-PIN.json",
+      "target": "suzycube/FRAMEWORK-BUILD-PIN.json"
+    },
+    {
       "architecture": "aarch64",
       "build_profile": "universal-low-glibc",
-      "provenance": "build_universal.sh; pinned offline Debian Buster image sha256:036c7910ea53bc78cc213452afa92fa83d55de1c51ae54f315af58b5a41a45cf; target sysroot used for headers only",
+      "kind": "project-linux",
+      "mode": "0755",
       "needed": [
         "ld-linux-aarch64.so.1",
         "libSDL2-2.0.so.0",
@@ -130,121 +94,199 @@
         "libpthread.so.0",
         "libz.so.1"
       ],
-      "soname": null
+      "provenance": "build_universal.sh; offline Debian Buster image sha256:036c7910ea53bc78cc213452afa92fa83d55de1c51ae54f315af58b5a41a45cf; framework pin sha256:5c786a8ad3c35fb716dd1e6e0b264b94ca32f1568759592d2251abcc8a4a51b9; target sysroot used for headers only",
+      "sha256": "d77e37da3023015e481d65c89d711c1125491edad8d7d497f3cbef3ed46b9524",
+      "soname": null,
+      "source": "build/suzycube-nextos",
+      "target": "suzycube/suzycube-nextos"
     },
     {
+      "kind": "payload",
+      "mode": "0644",
+      "sha256": "8be5a11a68b69308de52f34fe706c1e7b5c421ba45c2974b23678af954de749b",
       "source": "README.md",
-      "target": "suzycube/README.md",
-      "kind": "payload",
-      "mode": "0644",
-      "sha256": "32db9d87a2b1f5e78d9d40c55528b584fcbe42e5eb761677af4b7eb2261bdc7d"
+      "target": "suzycube/README.md"
     },
     {
+      "kind": "payload",
+      "mode": "0644",
+      "sha256": "8e40168f82dab090a5cc1563e3201c30bfc54050dd4186061cbf540fba5feacf",
       "source": "INSTALLATION.md",
-      "target": "suzycube/INSTALLATION.md",
-      "kind": "payload",
-      "mode": "0644",
-      "sha256": "0c33e47181de51302e3b2b31ed57b9f4403dfcd19c39d298fbdb9e710a296d8b"
+      "target": "suzycube/INSTALLATION.md"
     },
     {
+      "kind": "license-notice",
+      "mode": "0644",
+      "sha256": "cfca1bdedd1198934d5b2709ad9af067e2db8cd348350e4f836671ad6bfc0446",
       "source": "NOTICE.md",
-      "target": "suzycube/NOTICE.md",
-      "kind": "license-notice",
-      "mode": "0644",
-      "sha256": "b416ed935b23edc0884db2e78ec4ad21440af2dce20c3d06c5fc02983d829aa6"
+      "target": "suzycube/NOTICE.md"
     },
     {
+      "kind": "license-notice",
+      "mode": "0644",
+      "sha256": "fd48a1afc565e3b27d07ca190012389f5c0f377abd7285e779c75c58540171ce",
       "source": "LICENSE",
-      "target": "suzycube/LICENSE",
-      "kind": "license-notice",
-      "mode": "0644",
-      "sha256": "fd48a1afc565e3b27d07ca190012389f5c0f377abd7285e779c75c58540171ce"
+      "target": "suzycube/LICENSE"
     },
     {
+      "kind": "payload",
+      "mode": "0644",
+      "sha256": "d343770461504b96bbf75486480dcc6840092fe6e29d3e56063b486efb42d819",
       "source": "version.txt",
-      "target": "suzycube/version.txt",
-      "kind": "payload",
-      "mode": "0644",
-      "sha256": "7ac07fd87814a73947308b1c213e9df852eceab6c18e7c3df9d07b892c176b0d"
+      "target": "suzycube/version.txt"
     },
     {
+      "kind": "payload",
+      "mode": "0644",
+      "sha256": "90acc8f7dbe53522ef53b1b775fa9b0549455d99200333934d0b7c078de3ddca",
       "source": "gamedata-template/README.txt",
-      "target": "suzycube/gamedata/README.txt",
-      "kind": "payload",
-      "mode": "0644",
-      "sha256": "90acc8f7dbe53522ef53b1b775fa9b0549455d99200333934d0b7c078de3ddca"
+      "target": "suzycube/gamedata/README.txt"
     },
     {
-      "source": "extractor.json",
-      "target": "suzycube/extractor.json",
       "kind": "nxextract-recipe",
       "mode": "0644",
-      "sha256": "d0fb1725dca9b2b6cbb8a90f1a829a9c7e999b2f97d8cefb3617cef69edd0781"
+      "sha256": "d0fb1725dca9b2b6cbb8a90f1a829a9c7e999b2f97d8cefb3617cef69edd0781",
+      "source": "extractor.json",
+      "target": "suzycube/extractor.json"
     },
     {
-      "source": "nxextract-version.txt",
-      "target": "suzycube/nxextract-version.txt",
       "kind": "payload",
       "mode": "0644",
-      "sha256": "0a7f010a9dcd5da97381bc31145ec5a2f02ab053c1f9d524082491a09f83c752"
+      "sha256": "6533e8522a36b1a770121f0ff7609748d10551bc28546c6358d27b00e0280531",
+      "source": "nxextract-version.txt",
+      "target": "suzycube/nxextract-version.txt"
     },
     {
-      "source": "nxextract/nxextract.py",
-      "target": "suzycube/nxextract/nxextract.py",
       "kind": "nxextract",
       "mode": "0644",
-      "sha256": "a4a8e5d3bf2a1344491e27921c54430ee9b4e3fedd0160631da96734fa3d5170"
+      "sha256": "b1b46ecdf1336b1412d7d3a3d291220aca4834a47730a5545afb382dae6036b5",
+      "source": "nxextract/nxextract.py",
+      "target": "suzycube/nxextract/nxextract.py"
     },
     {
-      "source": "nxextract/merge-suzycube-data.py",
-      "target": "suzycube/nxextract/merge-suzycube-data.py",
       "kind": "payload",
       "mode": "0755",
-      "sha256": "fdf61f62c87fa45e836cca273a1f207134d8e3783adf23008b677196d701d177"
+      "sha256": "fdf61f62c87fa45e836cca273a1f207134d8e3783adf23008b677196d701d177",
+      "source": "nxextract/merge-suzycube-data.py",
+      "target": "suzycube/nxextract/merge-suzycube-data.py"
     },
     {
-      "source": "nxextract/nxextract-ui",
-      "target": "suzycube/nxextract/nxextract-ui",
-      "kind": "third-party-linux",
-      "mode": "0755",
-      "sha256": "046afb583f5a211c946495e639409f81d9cfec706788eeccb7924b0e8e5a50b6",
       "architecture": "aarch64",
+      "build_profile": "universal-low-glibc",
+      "kind": "nxextract-ui-linux",
+      "mode": "0755",
       "needed": [
         "libc.so.6",
         "libdl.so.2"
       ],
+      "provenance": "NXExtract UI 1.2.9 canonical AArch64 artifact",
+      "sha256": "7ca901d8515ab9a084be81e05888e1fd03cec80fb03896df6331c1c95698ef56",
       "soname": null,
-      "build_profile": "universal-low-glibc",
-      "provenance": "NXExtract 1.2.6 canonical AArch64 setup UI, redistributed unmodified (MIT)"
+      "source": "nxextract/nxextract-ui",
+      "target": "suzycube/nxextract/nxextract-ui"
     },
     {
-      "source": "nxextract/run-extractor.sh",
-      "target": "suzycube/nxextract/run-extractor.sh",
       "kind": "nxextract-runner",
       "mode": "0644",
-      "sha256": "179b72f02b9dfdf3ed1bdc382d074fb4ef07f83e3d62cfccfc74a950e68679c2"
+      "sha256": "c931427c7226d22d7e30eee8549b50f0621dca1c9d0336634aca08631f454d7a",
+      "source": "nxextract/run-extractor.sh",
+      "target": "suzycube/nxextract/run-extractor.sh"
     },
     {
-      "source": "nxextract/nxextract-runtime-env.sh",
-      "target": "suzycube/nxextract/nxextract-runtime-env.sh",
       "kind": "nxextract-runtime-env",
       "mode": "0644",
-      "sha256": "332919a9960d4317563b647f9932d1a4367da147a425fe2f78eafd706f01563f"
+      "sha256": "332919a9960d4317563b647f9932d1a4367da147a425fe2f78eafd706f01563f",
+      "source": "nxextract/nxextract-runtime-env.sh",
+      "target": "suzycube/nxextract/nxextract-runtime-env.sh"
     },
     {
-      "source": "licenses/NXExtract-MIT.txt",
-      "target": "suzycube/licenses/NXExtract-MIT.txt",
       "kind": "license-notice",
       "mode": "0644",
-      "sha256": "74d7d9d40e27fbfe23cb462f9608fa07cbe53ffb0b88a0da9e85dda240c2c788"
+      "sha256": "74d7d9d40e27fbfe23cb462f9608fa07cbe53ffb0b88a0da9e85dda240c2c788",
+      "source": "licenses/NXExtract-MIT.txt",
+      "target": "suzycube/licenses/NXExtract-MIT.txt"
     },
     {
-      "source": "port.json",
-      "target": "suzycube/port.json",
+      "architecture": "aarch64",
+      "build_profile": "universal-low-glibc",
+      "kind": "nxsplash-linux",
+      "mode": "0755",
+      "needed": [
+        "libc.so.6",
+        "libdl.so.2"
+      ],
+      "provenance": "NXSplash 0.1.2 canonical AArch64 artifact",
+      "sha256": "d85d896a906a778c9af250e5617d45d085a98b18552cb0254addbbc626036c97",
+      "soname": null,
+      "source": "nxsplash-nextos",
+      "target": "suzycube/nxsplash-nextos"
+    },
+    {
       "kind": "portmaster-metadata",
       "mode": "0644",
-      "sha256": "bbf4d51823bc55be66bfc29a22f90e7fe2e9f64a251fd858a7dc2f749a7445e5"
+      "sha256": "704986bd814d48e692393e6e5b70e4d8857657df52f58b6ae6a1015f80f3f000",
+      "source": "port.json",
+      "target": "suzycube/port.json"
+    },
+    {
+      "kind": "portmaster-metadata",
+      "mode": "0644",
+      "sha256": "0c3e5d6a4e4328c370eebbbf96ff2ad63df27c499485961ea364161c3b2bd3d2",
+      "source": "gameinfo.xml",
+      "target": "suzycube/gameinfo.xml"
     }
   ],
-  "exceptions": []
+  "nxextract": {
+    "minimum_version": "1.2.10",
+    "path": "suzycube/nxextract/nxextract.py",
+    "recipe_path": "suzycube/extractor.json",
+    "recipe_sha256": "d0fb1725dca9b2b6cbb8a90f1a829a9c7e999b2f97d8cefb3617cef69edd0781",
+    "runner_path": "suzycube/nxextract/run-extractor.sh",
+    "runner_sha256": "c931427c7226d22d7e30eee8549b50f0621dca1c9d0336634aca08631f454d7a",
+    "runtime_env_path": "suzycube/nxextract/nxextract-runtime-env.sh",
+    "runtime_env_sha256": "332919a9960d4317563b647f9932d1a4367da147a425fe2f78eafd706f01563f",
+    "sha256": "b1b46ecdf1336b1412d7d3a3d291220aca4834a47730a5545afb382dae6036b5",
+    "ui_path": "suzycube/nxextract/nxextract-ui",
+    "ui_sha256": "7ca901d8515ab9a084be81e05888e1fd03cec80fb03896df6331c1c95698ef56",
+    "version": "1.2.10"
+  },
+  "package": {
+    "id": "suzycube",
+    "launcher": "Suzy Cube.sh",
+    "launcher_chain": [
+      "Suzy Cube.sh"
+    ],
+    "launcher_contract": {
+      "config_path": "suzycube/nxport.json",
+      "config_sha256": "3575064b140be69b4b40ee5b585c83d4b419bf3391e9bd2f0fd2eb7285f1d070",
+      "generator": "nxbootstrap",
+      "version": "0.6.15"
+    },
+    "license": {
+      "file": "suzycube/LICENSE",
+      "source_url": "https://github.com/NextOs-Ports/suzycube-nextos",
+      "spdx_id": "GPL-3.0-only"
+    },
+    "port_dir": "suzycube",
+    "profile": "universal-portmaster",
+    "version": "1.1.12"
+  },
+  "portmaster_metadata": {
+    "gameinfo_xml": {
+      "path": "suzycube/gameinfo.xml",
+      "sha256": "0c3e5d6a4e4328c370eebbbf96ff2ad63df27c499485961ea364161c3b2bd3d2"
+    },
+    "images": [],
+    "port_json": {
+      "path": "suzycube/port.json",
+      "sha256": "704986bd814d48e692393e6e5b70e4d8857657df52f58b6ae6a1015f80f3f000"
+    }
+  },
+  "release": {
+    "compression": "deflated",
+    "max_glibc": "2.30",
+    "source_date_epoch": 1786752000
+  },
+  "schema_version": 2,
+  "source_root": "."
 }

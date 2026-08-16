@@ -9,13 +9,15 @@ umask 077
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 PORT_DIR=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd -P)
-REPO_ROOT=$(CDPATH= cd -- "$PORT_DIR/../.." && pwd -P)
-NXRELEASE="$REPO_ROOT/framework/nxrelease/nxrelease.py"
-NXRELEASE_VERSION=0.2.5
-NXRELEASE_SHA256=097ef954261d7e31fb4a759caf2ebda9be02f069b1968e3f7b379d92f51e732f
+# shellcheck source=../tools/framework-source.sh
+source "$PORT_DIR/tools/framework-source.sh"
+FRAMEWORK_REPOSITORY=$(sc_resolve_framework_repository "$PORT_DIR")
+NXRELEASE=${SC_NXRELEASE:-"$FRAMEWORK_REPOSITORY/framework/nxrelease/nxrelease.py"}
+NXRELEASE_VERSION=0.2.14
+NXRELEASE_SHA256=694258c94a5118bac70bea44a0505a380268450875a49836d130812781dee508
 MANIFEST="$PORT_DIR/nxrelease.json"
 DESTINATION=${1:-"$PORT_DIR/.build/release"}
-ARCHIVE_NAME=SuzyCube.NextOS-v1.1.9.zip
+ARCHIVE_NAME=SuzyCube.PortMaster-v1.1.12.zip
 
 fail() {
   printf 'suzy cube package error: %s\n' "$*" >&2
@@ -57,10 +59,18 @@ python3 -B "$NXRELEASE" bundle \
   --destination "$DESTINATION" \
   --archive-name "$ARCHIVE_NAME" \
   --max-glibc 2.30
-python3 -B "$NXRELEASE" verify \
-  --archive "$DESTINATION/$ARCHIVE_NAME" \
-  --sha256-file "$DESTINATION/$ARCHIVE_NAME.sha256" \
+VERIFY_ARGUMENTS=(
+  verify
+  --archive "$DESTINATION/$ARCHIVE_NAME"
+  --sha256-file "$DESTINATION/$ARCHIVE_NAME.sha256"
   --max-glibc 2.30
+)
+if [[ -n ${SC_PREVIOUS_ARCHIVE:-} ]]; then
+  [[ -f $SC_PREVIOUS_ARCHIVE && ! -L $SC_PREVIOUS_ARCHIVE ]] ||
+    fail "SC_PREVIOUS_ARCHIVE is missing, not regular, or a symlink"
+  VERIFY_ARGUMENTS+=(--previous-archive "$SC_PREVIOUS_ARCHIVE")
+fi
+python3 -B "$NXRELEASE" "${VERIFY_ARGUMENTS[@]}"
 
 printf 'SUZY CUBE BYO RELEASE PACKAGE: %s\n' "$DESTINATION/$ARCHIVE_NAME"
 printf '%s\n' \
